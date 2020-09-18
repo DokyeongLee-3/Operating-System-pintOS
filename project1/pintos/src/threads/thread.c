@@ -230,7 +230,6 @@ thread_block (void)
   
   struct thread *t = thread_current(); 
   thread_current ()->status = THREAD_BLOCKED; 
-  //list_remove(&(t->elem));
   schedule ();
 }
 
