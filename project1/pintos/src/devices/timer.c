@@ -16,6 +16,8 @@
 #if TIMER_FREQ > 1000
 #error TIMER_FREQ <= 1000 recommended
 #endif
+ 
+extern struct list all_list;
 
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
@@ -89,11 +91,17 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+  /*
   int64_t start = timer_ticks ();
-
   ASSERT (intr_get_level () == INTR_ON);
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
+  */
+  thread_current()->left_time_to_sleep = ticks;
+  thread_current()->sleeping = true;
+  thread_block();
+  
+  
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -173,6 +181,17 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   printf("timer interrupt!!!!!\n");
   ticks++;
+  struct thread *t;
+  struct list_elem *e = list_front(&all_list);
+  for(; e != list_end(&all_list); e = list_next(&all_list)){
+    t = list_entry(e, struct thread, allelem);
+    if(t->sleeping == true)
+      t->left_time_to_sleep = t->left_time_to_sleep - 1;
+    if(t->left_time_to_sleep == 0 && t->sleeping == true){ //잘 시간이 남지 않았고 sleeping = true되어 있는 쓰레드는 깨우기
+      t->sleeping = false;
+      thread_unblock(t);
+    }
+  }
   thread_tick ();
 }
 
