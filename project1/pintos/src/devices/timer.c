@@ -95,7 +95,7 @@ timer_sleep (int64_t ticks)
   ASSERT (intr_get_level () == INTR_ON);
   //while (timer_elapsed (start) < ticks) 
   //  thread_yield ();
-  printf("call timer sleep\n");
+  //printf("call timer sleep\n");
   enum intr_level old_level = intr_disable();
   thread_current()->left_time_to_sleep = ticks;
   thread_current()->sleeping = true;
@@ -180,22 +180,21 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   //enum intr_level old_level = intr_disable();
-  //printf("timer interrupt!!!!!\n");
+  //printf("timer interrupt!!!!! and intr level is %d\n", intr_get_level());
   ticks++;
-  struct thread *t;
   struct list_elem *e = list_front(&all_list);
   //printf("list size is %d\n", list_size(&all_list));
   //printf("now sleeping?? %s\n", thread_current()->name);
   for(; e != list_end(&all_list); e = list_next(e)){
     //printf("for loop...\n");
-    t = list_entry(e, struct thread, allelem);
+    struct thread *t = list_entry(e, struct thread, allelem);
     if(t->sleeping == true && t->left_time_to_sleep > 0){
       //printf("minus 1....\n");
       t->left_time_to_sleep = t->left_time_to_sleep - 1;
     }
     if(t->left_time_to_sleep == 0 && t->sleeping == true){ //잘 시간이 남지 않았고 sleeping = true되어 있는 쓰레드는 깨우기
       t->sleeping = false;
-      printf("before thread_unblock..\n"); 
+      //printf("before thread_unblock..\n"); 
       thread_unblock(t);
     }
   }

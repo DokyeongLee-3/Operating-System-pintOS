@@ -181,7 +181,7 @@ thread_create (const char *name, int priority,
     return TID_ERROR;
 
   /* Initialize thread. */
-  init_thread (t, name, priority);
+  init_thread (t, name, priority); // thread 구조체 멤버 초기화 
   tid = t->tid = allocate_tid ();
 
   /* Prepare thread for first run by initializing its stack.
@@ -230,7 +230,7 @@ thread_block (void)
   
   struct thread *t = thread_current(); 
   thread_current ()->status = THREAD_BLOCKED; 
-  list_remove(&(t->elem));
+  //list_remove(&(t->elem));
   schedule ();
 }
 
@@ -245,14 +245,15 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
-  printf("thread_unblock %s\n", t->name);
-  printf("now intr level is %d\n", intr_get_level());
+  //printf("thread_unblock %s\n", t->name);
+  //printf("now intr level is %d\n", intr_get_level());
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
-
+  
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+  
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
