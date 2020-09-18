@@ -22,7 +22,7 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list;
+struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -190,6 +190,8 @@ thread_create (const char *name, int priority,
   old_level = intr_disable ();
 
   /* Stack frame for kernel_thread(). */
+  /* 가장 bottom에 있는 stack frame, 우리가 t로 부터 기대하는function의 wrapper function인
+   kernel_thread()함수에 대한 frame */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
   kf->function = function;
@@ -221,10 +223,14 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
+   //printf("thread_block %s\n", thread_current()->name);
+   //printf("and intr level is %d\n", intr_get_level());
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
-
-  thread_current ()->status = THREAD_BLOCKED;
+  
+  struct thread *t = thread_current(); 
+  thread_current ()->status = THREAD_BLOCKED; 
+  list_remove(&(t->elem));
   schedule ();
 }
 
@@ -239,6 +245,8 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
+  printf("thread_unblock %s\n", t->name);
+  printf("now intr level is %d\n", intr_get_level());
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
