@@ -95,7 +95,7 @@ thread_init (void)
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
-  init_thread (initial_thread, "main", PRI_DEFAULT);
+  init_thread (initial_thread, "main", PRI_DEFAULT); //struct thread멤버 초기화
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 }
@@ -103,18 +103,18 @@ thread_init (void)
 /* Starts preemptive thread scheduling by enabling interrupts.
    Also creates the idle thread. */
 void
-thread_start (void) 
+thread_start (void) //thread_create를 통해 idle thread를 만든다
 {
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
-  thread_create ("idle", PRI_MIN, idle, &idle_started);
+  thread_create ("idle", PRI_MIN, idle, &idle_started); 
 
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
   /* Wait for the idle thread to initialize idle_thread. */
-  sema_down (&idle_started);
+  sema_down (&idle_started); //idle thread가 하는일인 idle함수가 실행돼서 sema_up 시켜줄때까지 여기서 block
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -176,7 +176,7 @@ thread_create (const char *name, int priority,
   ASSERT (function != NULL);
 
   /* Allocate thread. */
-  t = palloc_get_page (PAL_ZERO);
+  t = palloc_get_page (PAL_ZERO); // thread를 위한 memory(4KB) 할당
   if (t == NULL)
     return TID_ERROR;
 
@@ -394,7 +394,7 @@ thread_get_recent_cpu (void)
    ready list.  It is returned by next_thread_to_run() as a
    special case when the ready list is empty. */
 static void
-idle (void *idle_started_ UNUSED) 
+idle (void *idle_started_ UNUSED) //UNUSED가 붙어있으면 이 파라미터가 함수에서 안쓰일수도 있다는걸 의미
 {
   struct semaphore *idle_started = idle_started_;
   idle_thread = thread_current ();
@@ -418,7 +418,7 @@ idle (void *idle_started_ UNUSED)
 
          See [IA32-v2a] "HLT", [IA32-v2b] "STI", and [IA32-v3a]
          7.11.1 "HLT Instruction". */
-      asm volatile ("sti; hlt" : : : "memory");
+      asm volatile ("sti; hlt" : : : "memory"); //sti는 intr_enable
     }
 }
 
@@ -430,7 +430,7 @@ kernel_thread (thread_func *function, void *aux)
 
   intr_enable ();       /* The scheduler runs with interrupts off. */
   function (aux);       /* Execute the thread function. */
-  thread_exit ();       /* If function() returns, kill the thread. */
+  thread_exit ();       /* If function() returns, kill the thread. 원하는 동작인 function(aux)를 수행하고 끝나면 thread_exit으로 없앰. idle thread같은 경우엔 function이 idle함수, aux가 struct idle_started */
 }
 
 /* Returns the running thread. */

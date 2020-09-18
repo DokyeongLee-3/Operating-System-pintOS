@@ -167,9 +167,11 @@ timer_print_stats (void)
 }
 
 /* Timer interrupt handler. */
+// 여기서 tick이 증가
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  printf("timer interrupt!!!!!\n");
   ticks++;
   thread_tick ();
 }
