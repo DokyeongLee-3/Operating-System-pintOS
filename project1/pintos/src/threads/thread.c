@@ -253,7 +253,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   
-  list_push_back (&ready_list, &t->elem);
+  list_push_back (&ready_list, &t->elem); 
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -505,8 +505,25 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else{
+    enum intr_level old_level = intr_disable();
+    struct list_elem *e = list_front(&ready_list);
+    struct thread *t = list_entry(e, struct thread, elem);
+    int max_priority = t->priority;
+    for(; e != list_end(&ready_list); e = list_next(e)){ //여기서 max_prority가 얼마인지 찾기
+      if(list_entry(e, struct thread, elem)->priority > max_priority)
+        max_priority = list_entry(e, struct thread, elem)->priority;
+    }
+    e = list_front(&ready_list);
+    t = list_entry(e, struct thread, elem);
+   for(; e != list_end(&ready_list); e = list_next(e)){  //여기서 위에서 찾은 max priority를 가진 thread찾기
+      if(list_entry(e, struct thread, elem)->priority == max_priority)
+        break;
+    }
+    t = list_entry(e, struct thread, elem);
+    intr_set_level(old_level);
+    return t;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
