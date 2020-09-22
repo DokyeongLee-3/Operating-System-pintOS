@@ -206,10 +206,17 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  if(t->priority > running_thread()->priority){
+   //printf("create new thread priority %d and running one is %d\n", t->priority, running_thread()->priority);
+    thread_unblock(t);
+    thread_yield();
+  }
+   else
+     thread_unblock (t);
+
   intr_set_level (old_level);
 
   /* Add to run queue. */
-  thread_unblock (t);
 
   return tid;
 }
@@ -254,7 +261,12 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   
   list_push_back (&ready_list, &t->elem); 
-  t->status = THREAD_READY;
+  //if(t->priority > thread_current()->priority){
+  //  thread_yield();
+  //}  
+  //else{
+    t->status = THREAD_READY;
+  //}
   intr_set_level (old_level);
 }
 
@@ -351,7 +363,36 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  //printf("new_priority is %d and current priority is %d\n", new_priority, thread_current ()->priority);
+  //enum intr_level old_level = intr_disable();
   thread_current ()->priority = new_priority;
+  if(!list_empty(&ready_list)){
+    struct list_elem *e = list_front(&ready_list);
+    struct thread *t = list_entry(e, struct thread, elem);
+
+    int max_priority = t->priority;
+    for(; e != list_end(&ready_list); e = list_next(e)){ //여기서 max_prority가 얼마인지 찾기
+      if(list_entry(e, struct thread, elem)->priority > max_priority)
+        max_priority = list_entry(e, struct thread, elem)->priority;
+
+    }
+    //printf("1 max priority is %d\n", max_priority);
+    e = list_front(&ready_list);
+    t = list_entry(e, struct thread, elem);
+    
+    for(; e != list_end(&ready_list); e = list_next(e)){  //여기서 위에서 찾은 max priority를 가진 thread찾기
+      if(list_entry(e, struct thread, elem)->priority == max_priority)
+        break;
+    }
+    t = list_entry(e, struct thread, elem);
+    //printf("2 max priority is %d\n", t->priority);
+    if(t->priority > new_priority){
+      //printf("here yes yield\n");
+      //intr_set_level(old_level);
+      thread_yield();
+    }  
+  }
+  //intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
