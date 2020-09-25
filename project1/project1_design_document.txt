@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Dokyeong Lee <dokeng7@unist.ac.kr>
+Hyejin Kim <hyejinkim99@unist.ac.kr>
 
 ---- PRELIMINARIES ----
 
@@ -21,6 +20,8 @@ FirstName LastName <email@domain.example>
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
 
+None.
+
 			     ALARM CLOCK
 			     ===========
 
@@ -30,13 +31,23 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+bool sleeping : For separating sleeping threads with not sleeping ones. I initialize it with false and it will be assigned with true when we make them sleep.
+
+int left_time_to_sleep : We need to know how much time this thread will sleep. So I assign sleeping time to this member and wake it up when the sleeping time is over.
+
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+When timer_sleep is called, the struct members of current thread which are sleeping and left_time_to_sleep are assigned with true and given ticks each. Whenever the timer interrupt handler is called, the variable "ticks" is increased and that means left sleeping time is decreased by 1. So we iterate the all_list which contains all threads and find sleeping thread. And then we decrement thread's left sleeping time.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+Whenever the timer interrupt handler is called, the "ticks" is increased and check left time to sleep for threads without scheduling them. But, originally, the busy wait way schedules sleeping threads as well and they check their own left time to sleep. It is wasteful time resource. However, we know how much time they should sleep in advance. Just after the time when they have slept as much as we should, we wake them up. They are blocked and not scheduled. Therefore, it does not check left time to sleep and it does not waste time resource. In that way, we minimize the time spent in the timer interrupt handler.
+
 
 ---- SYNCHRONIZATION ----
 
@@ -51,6 +62,9 @@ FirstName LastName <email@domain.example>
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
 
+The requirement is deleting the busy wait. To do this, we need to delete the while loop and consider other way to check a left time to sleep. Therefore, we made some members in struct thread and make use of these members to wake it up. When the timer_sleep() is called, we assign left time to sleep to the current thread and wake it up after the ticks is elapsed by the timer_interrupt().
+
+
 			 PRIORITY SCHEDULING
 			 ===================
 
@@ -59,6 +73,8 @@ FirstName LastName <email@domain.example>
 >> B1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+
+Nothing is added after the alarm clock
 
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
@@ -85,6 +101,8 @@ FirstName LastName <email@domain.example>
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+Basically, we need to pick a next thread to run in terms of priority not order. So we implement this algorithm in the next_thread_to_run() which choose next thread in terms of priority. Also we need to consider priority changing situation and our design implemented this. If maximum priority in the ready queue is higher than current thread's after changing the priority using the thread_set_priroity(), we should yield control to higher priority thread right away. So I implemented this algorithm in thread_set_priority().
 
 			  ADVANCED SCHEDULER
 			  ==================
