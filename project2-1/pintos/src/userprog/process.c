@@ -18,6 +18,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+extern struct list all_list;
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -39,6 +41,8 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
+
+
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -54,17 +58,28 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+
+// file_name을 copy해둔 char*로 parse를 진행해보자
+char my_copy[100];
+memset(my_copy, 0, sizeof file_name);
+strlcpy(my_copy, file_name, 10);
+
+
   success = load (file_name, &if_.eip, &if_.esp);
+//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -73,6 +88,9 @@ start_process (void *file_name_)
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+//The "memory" clobber tells the compiler that the assembly code performs memory reads or writes
+// &if를 esp에게 전달하고 intr_exit으로 점프
+//asm volatile ( : : : "memory") -> compiler가 memory access order 최적화를 못하게함
   NOT_REACHED ();
 }
 
@@ -88,6 +106,12 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  int i = 0;
+  while(true){
+    i = i + 1;
+    if(i > 1000000000)
+      break;
+  }
   return -1;
 }
 
@@ -195,7 +219,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char *my_copy);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -220,9 +244,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
   /* Open executable file. */
-  file = filesys_open (file_name);
+//printf("file_name is ? %s\n", file_name);
+//printf("file_name size is %d\n", sizeof file_name);
+char my_copy[100];
+memcpy(my_copy, file_name, sizeof my_copy);
+//printf("original file name(my_copy): %s\n", my_copy);
+char *save_ptr;
+char *front = strtok_r(file_name, " ", &save_ptr);
+  file = filesys_open (front);
+
+
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -241,7 +274,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
-
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -301,21 +333,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
+
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, my_copy))
     goto done;
+
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
-
   success = true;
-
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+
   return success;
 }
-
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -427,7 +459,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char *my_copy) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -441,6 +473,67 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+
+///////////// argument passing/////////////
+  int arg_count = 0;
+  char *front[25];
+  int contain_null_size[25] = {0, };
+  char *save_ptr;
+  if(success){
+    front[arg_count] = strtok_r(my_copy, " " , &save_ptr);
+    arg_count = arg_count+1;
+    while((front[arg_count] = strtok_r(NULL, " ", &save_ptr)) != NULL){
+      arg_count = arg_count+1;
+    }
+
+
+    int tmp_count = arg_count;
+    while(tmp_count != 0){
+      contain_null_size[tmp_count-1] = strlen(front[tmp_count-1])+1; //here!
+      int temp_size = contain_null_size[tmp_count-1];
+      for(;temp_size > 0;){
+        *esp = *esp - 1;
+        *((char *)*esp) = front[tmp_count-1][temp_size-1];
+        //printf(" **(char**)esp is %c\n", **(char**)esp);
+        //printf("hex_dump %c\n", ((uint8_t*)(*esp))[contain_null_size-1]);
+        temp_size = temp_size - 1;
+      }
+      //printf("*esp is %p and esp[] is %02hhx\n", *esp, ((uint8_t *)(*esp))[0]);
+      tmp_count = tmp_count-1;
+    }
+    while((int)*esp % 4 != 0){ //word align
+      *esp = *esp-1;
+      **(char**)esp = '\0';
+    }
+    int i = 0;
+    for( ;i < 4; i = i+1){
+      *esp = *esp-1;
+      **(char**)esp = '\0';
+    }
+    tmp_count = arg_count;
+    int cumulative = 0;
+    //printf("contain_null_size[tmp_count-1] is %d\n", contain_null_size[tmp_count-1]);
+    for(; tmp_count > 0; tmp_count = tmp_count-1){
+      *esp= *esp-4;
+      //printf(" PHYS_BASE-contain_null_size[tmp_count-1] is %p\n", PHYS_BASE-contain_null_size[tmp_count-1]);
+      **(int **)esp = PHYS_BASE-contain_null_size[tmp_count-1] - cumulative;
+      cumulative = cumulative + contain_null_size[tmp_count-1];
+    }
+    *esp = *esp - 4;
+    char* tmp = *esp + 4; //0x bf ff ff ec
+    **(int **)esp = tmp;
+
+    *esp = *esp - 4;
+    **(int**)esp = arg_count; // push argc
+    i = 0;
+    for(; i < 4; i = i+1){
+      *esp = *esp-1;
+      **(char **)esp = '\0'; // push fake return address
+    }
+    
+  }
+//hex_dump(*esp, *esp, 300, 1);
+  ///////////////////////////////////////////////
   return success;
 }
 
