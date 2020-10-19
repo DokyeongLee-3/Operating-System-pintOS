@@ -18,36 +18,70 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+
+
+/*
+ARGUMENT PASSING
+
+1. 구현해야 할 부분
+process_execute ()는 file_name을 받아서 새로운 process를 만드는 일을 한다.
+kernel은 여기에서 user stack ?????? 에 argument를 미리 넣어줘야 함.
+
+2. 어느 부분에서 argument passing을 구현할 수 있을까?
+process_execute ()에선 thread_create ()를 통해 thread를 생성함. 그러므로 여기서 바로 stack에 설정하기 힘듦.
+
+*/
+
+
+// threads/thread.c 에 선언되어 있는 all_list. 모든 프로세스가 이 리스트에 들어있다.
 extern struct list all_list;
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+
+
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
+/* process_execute ()는 threads/init.c에 있는 main () -> run_actions() -> run_task () -> process_execute () 이 순서로 호출됨.
+   file_name은 original command_line의 특정 word의 시작을 가리킴. */
 tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
   tid_t tid;
 
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
+  /* file_name(original command_line)을 PGSIZE만큼 fn_copy에 복사함.
+     fn_copy가 사용할 공간(page)을 할당 받음. (이 부분은 정확하게 모르겠음..)
+     threads/palloc.c에 있는 palloc_get_page ()를 이용해서 page 할당.
+     parameter로 0을 넘겨주면 user_pool의 page를 사용함.
+     또한 이 함수에서 palloc_get_multiple ()을 호출하고, 이때 기본적으로 한 페이지가 할당되기에 argument의 size는 한 페이지(4KB)를 넘기지 않음. */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+
+
   /* Create a new thread to execute FILE_NAME. */
-
-
+  /* threads/thread.c에 있는 thread_create ()를 이용해서 thread를 만들게 됨.
+     => tid_t thread_create (const char *name, int priority, thread_func *function, void *aux)
+        init_thread ()에는 file_name 사용되고 stack frame 설정할 땐 fn_copy 사용됨.
+        그리고 start_process ()의 ptr도 stack frame 설정할 때 사용되는 듯 (이 파트는 잘 모르겠다..) */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
 }
+
+
+
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -66,14 +100,21 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
 
-// file_name을 copy해둔 char*로 parse를 진행해보자
-char my_copy[100];
-memset(my_copy, 0, sizeof file_name);
-strlcpy(my_copy, file_name, 10);
 
 
+  // file_name을 copy해둔 char*로 parse를 진행해보자
+  /* memset(void *_Dst, int _Val, size_t _Size)
+     dst라는 시작 위치부터(포인터로 주어짐) size byte만큼 value로 초기화 하는 함수. */
+  char my_copy[100];
+  memset(my_copy, 0, sizeof file_name);
+  strlcpy(my_copy, file_name, 10);
+
+
+
+  /* user process를 불러오는 부분
+     load () 함수를 살펴보면 load에서 file을 열어서 userprog을 불러오는 것을 볼 수 있음 */
   success = load (file_name, &if_.eip, &if_.esp);
-//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  //hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -244,18 +285,25 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+  
+  
+
+  
+  /* my_copy로 file_name을 복사한 후 argument를 parsing.
+     복사를 하는 이유는 원래 command_line을 건드리지 않기 위해서. */
+
+  //printf("file_name is ? %s\n", file_name);
+  //printf("file_name size is %d\n", sizeof file_name);
+  char my_copy[100];
+  memcpy(my_copy, file_name, sizeof my_copy);
+  //printf("original file name(my_copy): %s\n", my_copy);
+  char *save_ptr;
+  char *front = strtok_r(file_name, " ", &save_ptr);
+  
+  
+
   /* Open executable file. */
-//printf("file_name is ? %s\n", file_name);
-//printf("file_name size is %d\n", sizeof file_name);
-char my_copy[100];
-memcpy(my_copy, file_name, sizeof my_copy);
-//printf("original file name(my_copy): %s\n", my_copy);
-char *save_ptr;
-char *front = strtok_r(file_name, " ", &save_ptr);
   file = filesys_open (front);
-
-
-
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -338,14 +386,13 @@ char *front = strtok_r(file_name, " ", &save_ptr);
   if (!setup_stack (esp, my_copy))
     goto done;
 
-
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
   success = true;
+
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
-
   return success;
 }
 /* load() helpers. */
@@ -456,6 +503,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+
+
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -464,6 +514,9 @@ setup_stack (void **esp, char *my_copy)
   uint8_t *kpage;
   bool success = false;
 
+  /* minimal stack을 위해 page를 할당 받음.
+     kpage의 페이지 할당 성공 -> esp(stack pointer)를 page 시작부분으로 mapping (install_page는 잘 모르겠음..)
+     kpage의 페이지 할당 실패 -> success = false 설정하고 page 할당 해제함. */
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
@@ -474,12 +527,46 @@ setup_stack (void **esp, char *my_copy)
         palloc_free_page (kpage);
     }
 
-///////////// argument passing/////////////
+
+
+///////////// argument passing /////////////
+
+/*
+
+ARGUMENT PASSING 구현
+
+1. strtok_r ()을 이용해서 argument 분리
+2. stack에 arguments 기록
+3. stack에 word-align 기록
+4. stack에 argv에 대한 ptr 기록
+5. stack에 argv, argc, return address 기록
+
+*/
+
+
+
+  /* 변수 선언 */
+
+  // argument의 갯수
   int arg_count = 0;
+  // argument들의 address를 담은 배열
   char *front[25];
+  // 각 argument의 size (null 까지 포함한 size) - stack에 기록할 때 null까지 함께 기록하니까!
   int contain_null_size[25] = {0, };
+  // backup을 위한 ptr
   char *save_ptr;
+
+
+
   if(success){
+
+    /*
+    1. strtok_r ()을 이용해서 argument 분리
+        - arg_count를 추적하며 front[] 배열에 argument의 address를 기록함
+        - argument number와 front, arg_count 사이의 관계
+          - nth argument in front[n-1]
+          - arg_count = n  */
+
     front[arg_count] = strtok_r(my_copy, " " , &save_ptr);
     arg_count = arg_count+1;
     while((front[arg_count] = strtok_r(NULL, " ", &save_ptr)) != NULL){
@@ -487,53 +574,109 @@ setup_stack (void **esp, char *my_copy)
     }
 
 
+    
+    /*
+    2. stack에 arguments 기록
+        - stack을 사용하면 esp가 감소함
+        - argNum이 낮은 argument를 낮은 주소에 기록하려면, argNum이 높은 argument부터 기록해야 함
+          tmp_count = arg_count를 1씩 깎으며 front[]에 접근, stack에 argNum이 높은 애부터 차례로 기록
+        - argument를 기록할 때도 string을 역순으로 기록해야 함 (Big-Endian, 상위 비트를 낮은 주소에 배정)
+          contain_null_size[]를 이용해서 null을 포함한 argument의 size 기록
+          low byte부터 차례대로 high address에 기록 (bit에는 endian 구분 없음)
+        - argument를 기록할 때의 순서는 관계없지만, 여기서는 4단계의 편의를 위해 이 convention을 따름 */
+
     int tmp_count = arg_count;
+
     while(tmp_count != 0){
-      contain_null_size[tmp_count-1] = strlen(front[tmp_count-1])+1; //here!
+
+      // argNum이 높은 argument부터 차례로 기록, nth argument는 contain_null_size[n-1]에 기록됨
+      contain_null_size[tmp_count-1] = strlen(front[tmp_count-1]) + 1;   
       int temp_size = contain_null_size[tmp_count-1];
-      for(;temp_size > 0;){
+
+      // argument의 low byte부터 차례로 기록. Big-endian을 따름
+      for( ; temp_size > 0; ){
         *esp = *esp - 1;
-        *((char *)*esp) = front[tmp_count-1][temp_size-1];
+        *((char *)*esp) = front[tmp_count - 1][temp_size - 1];
         //printf(" **(char**)esp is %c\n", **(char**)esp);
         //printf("hex_dump %c\n", ((uint8_t*)(*esp))[contain_null_size-1]);
         temp_size = temp_size - 1;
       }
+
       //printf("*esp is %p and esp[] is %02hhx\n", *esp, ((uint8_t *)(*esp))[0]);
       tmp_count = tmp_count-1;
     }
-    while((int)*esp % 4 != 0){ //word align
+
+
+
+    /*
+    3. stack에 word-align 기록
+        - argument를 기록할 때 byte 단위로 기록했기에 word-align을 맞춰줘야 함
+          - word size가 4 bytes이므로 이에 맞춰서 align할 것 */
+
+    // word-align
+    while((int)*esp % 4 != 0){
       *esp = *esp-1;
       **(char**)esp = '\0';
     }
+
+
+
+    /*
+    4. stack에 argv에 대한 ptr 기록
+        - nth argument의 stack address를 argNum이 큰 것부터 순차적으로 기록
+          (2번처럼 argNum이 큰 argument의 address부터 차례로 기록)
+        - address[kth_argument] = (stack_top_address) - (sum_of_argument_size_1_to_k)
+        - address[(n+1)th_argument]도 기록해준다. null로 채움  */
+
+    // argv[n+1] = 모두 null로 채움
     int i = 0;
-    for( ;i < 4; i = i+1){
-      *esp = *esp-1;
+    for( ; i < 4 ; i = i + 1){
+      *esp = *esp - 1;
       **(char**)esp = '\0';
     }
-    tmp_count = arg_count;
-    int cumulative = 0;
+
+    // argument n to 1 기록하기 위한 변수 선언
+    tmp_count = arg_count;  // argNum이 큰 argument부터 기록
+    int cumulative = 0;     // cumulative = (sum_of_argument_size_1_to_k)
     //printf("contain_null_size[tmp_count-1] is %d\n", contain_null_size[tmp_count-1]);
-    for(; tmp_count > 0; tmp_count = tmp_count-1){
-      *esp= *esp-4;
+    
+    // argument의 address 기록
+    for( ; tmp_count > 0; tmp_count = tmp_count - 1){
+      *esp= *esp - 4;   // address가 4 bytes이므로 4 bytes만큼 깎은 후 기록
       //printf(" PHYS_BASE-contain_null_size[tmp_count-1] is %p\n", PHYS_BASE-contain_null_size[tmp_count-1]);
-      **(int **)esp = PHYS_BASE-contain_null_size[tmp_count-1] - cumulative;
+      **(int **)esp = PHYS_BASE-contain_null_size[tmp_count-1] - cumulative;    // esp에 address[kth_argument] 기록
       cumulative = cumulative + contain_null_size[tmp_count-1];
     }
-    *esp = *esp - 4;
-    char* tmp = *esp + 4; //0x bf ff ff ec
-    **(int **)esp = tmp;
 
-    *esp = *esp - 4;
-    **(int**)esp = arg_count; // push argc
+
+
+
+    /*
+    5. stack에 argv, argc, return address 기록
+        - argv = address[argv[0]] = esp + 4 (현재 stack값에서 4만큼 더한 값)
+        - argc = arg_count
+        - return address = null (4 bytes를 모두 null로 채울 것. fake return address)  */
+
+    // argv 기록
+    *esp = *esp - 4;        // esp update
+    char* tmp = *esp + 4;   // argv address 계산, 0x bf ff ff ec
+    **(int **)esp = tmp;    // push argv
+
+    // argc 기록
+    *esp = *esp - 4;            // esp update
+    **(int**)esp = arg_count;   // push argc
+
+    // return address 기록
     i = 0;
-    for(; i < 4; i = i+1){
-      *esp = *esp-1;
-      **(char **)esp = '\0'; // push fake return address
+    for( ; i < 4; i = i + 1){
+      *esp = *esp - 1;
+      **(char **)esp = '\0';    // push fake return address
     }
-    
   }
-//hex_dump(*esp, *esp, 300, 1);
-  ///////////////////////////////////////////////
+  //hex_dump(*esp, *esp, 300, 1);
+
+///////////// END OF argument passing /////////////
+
   return success;
 }
 
