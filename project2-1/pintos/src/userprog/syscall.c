@@ -231,7 +231,9 @@ syscall_handler (struct intr_frame *f UNUSED)
       - filesys_open ()이용하여 file을 연다
         => return value type이 struct file (in filesys/file.c) 이므로 struct file을 추가해줌
       - argument가 1개
-        - arg[1] = file name */
+        - arg[1] = file name
+      - static int return_value = fd
+        모든 process는 다른 fd 값을 가짐. 따라서 SYS_OPEN을 호출할 때마다 다른 return_value를 return 해야함.  */
 
 
   else if(*(uint32_t *)f->esp == 6){ //SYS_OPEN
@@ -273,12 +275,12 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       // file을 연 횟수가 1번
       if((struct file *)file_->inode->open_cnt == 1){
-        f->eax = thread_current()->tid; // return file descriptor 
+        f->eax = thread_current()->tid;   // return file descriptor 
         return_val = f->eax;
        //printf("return val at first is %d\n", return_val);
       }
 
-      // file을 연 횟수가 2번 이상? => return value가 nonnegative면 된다
+      // file을 연 횟수가 2번 이상? => 같은 return_val을 return 하면 안 됨. 1 증가시켜서 return
       else{
         //struct thread *t = list_entry(&(file_->inode->elem), struct thread, elem);
         //printf("tid is %d\n", t->tid);
