@@ -20,17 +20,44 @@
 
 
 
-/*
-ARGUMENT PASSING
+
+
+/* ARGUMENT PASSING
 
 1. 구현해야 할 부분
-process_execute ()는 file_name을 받아서 새로운 process를 만드는 일을 한다.
-kernel은 여기에서 user stack ?????? 에 argument를 미리 넣어줘야 함.
+  process_execute ()는 file_name을 받아서 새로운 process를 만드는 일을 한다.
+  kernel은 여기에서 user stack에 argument를 미리 넣어줘야 함.
 
-2. 어느 부분에서 argument passing을 구현할 수 있을까?
-process_execute ()에선 thread_create ()를 통해 thread를 생성함. 그러므로 여기서 바로 stack에 설정하기 힘듦.
+2. skeleton 분석
+  2-1. process_execute ()가 호출되는 과정
+    threads/init.c 의 main에서 run_actions ()을 호출
+    -> run_actions ()가 run_task ()를 호출 (command가 'run' 이므로)
+    -> run_task ()가 process_execute () 호출 (USERPROG이기 때문)
+  2-2. process_execute ()가 argument passing에 관여하는 과정
+    process_execute ()의 thread_create ()를 호출하며 start_process를 넘겨줌
+    -> thread_create ()에서 start_process ()가 실행됨
+    -> start_process ()의 load ()에서 user program을 불러옴 (filesys_open () 이용)
+       => load ()에서 argument passing을 해줘야 함
+    -> load ()에서 setup_stack ()을 호출. 이름부터 stack과 관련있음!!!!!!!!!!!!!!!!!!
+    -> setup_stack ()에서 argument passing 해주면 됨
 
-*/
+3. 구현 방법
+  3-1. load () 수정
+    load ()에서 user program file을 열기 위해 file_name을 넘겨줘야 한다
+    => filesys_open ()을 할 때 file_name의 첫번째 argument를 넘겨줌으로써 해결 (strtok_r () 이용)
+  3-2. setup_stack () 수정
+    setup_stack ()에서 argument들을 stack에 push
+    => 다섯 단계로 나누어서 구현
+       3-2-1. strtok_r ()을 이용해서 argument 분리
+       3-2-2. stack에 arguments 기록
+       3-2-3. stack에 word-align 기록
+       3-2-4. stack에 argments에 대한 ptr 기록
+       3-2-5. stack에 argv address, argc, return address 기록
+
+END */
+
+
+
 
 
 // threads/thread.c 에 선언되어 있는 all_list. 모든 프로세스가 이 리스트에 들어있다.
@@ -102,7 +129,7 @@ start_process (void *file_name_)
 
 
 
-  // file_name을 copy해둔 char*로 parse를 진행해보자
+  // file_name을 copy해둔 char*로 parse를 진행해보자 QQQQQQQQQQQQQQQQQQQQQ
   /* memset(void *_Dst, int _Val, size_t _Size)
      dst라는 시작 위치부터(포인터로 주어짐) size byte만큼 value로 초기화 하는 함수. */
   char my_copy[100];
@@ -538,8 +565,8 @@ ARGUMENT PASSING 구현
 1. strtok_r ()을 이용해서 argument 분리
 2. stack에 arguments 기록
 3. stack에 word-align 기록
-4. stack에 argv에 대한 ptr 기록
-5. stack에 argv, argc, return address 기록
+4. stack에 argments에 대한 ptr 기록
+5. stack에 argv address, argc, return address 기록
 
 */
 
@@ -560,8 +587,7 @@ ARGUMENT PASSING 구현
 
   if(success){
 
-    /*
-    1. strtok_r ()을 이용해서 argument 분리
+    /* 1. strtok_r ()을 이용해서 argument 분리
         - arg_count를 추적하며 front[] 배열에 argument의 address를 기록함
         - argument number와 front, arg_count 사이의 관계
           - nth argument in front[n-1]
@@ -575,8 +601,7 @@ ARGUMENT PASSING 구현
 
 
     
-    /*
-    2. stack에 arguments 기록
+    /* 2. stack에 arguments 기록
         - stack을 사용하면 esp가 감소함
         - argNum이 낮은 argument를 낮은 주소에 기록하려면, argNum이 높은 argument부터 기록해야 함
           tmp_count = arg_count를 1씩 깎으며 front[]에 접근, stack에 argNum이 높은 애부터 차례로 기록
@@ -608,8 +633,7 @@ ARGUMENT PASSING 구현
 
 
 
-    /*
-    3. stack에 word-align 기록
+    /* 3. stack에 word-align 기록
         - argument를 기록할 때 byte 단위로 기록했기에 word-align을 맞춰줘야 함
           - word size가 4 bytes이므로 이에 맞춰서 align할 것 */
 
@@ -621,8 +645,7 @@ ARGUMENT PASSING 구현
 
 
 
-    /*
-    4. stack에 argv에 대한 ptr 기록
+    /* 4. stack에 argments에 대한 ptr 기록
         - nth argument의 stack address를 argNum이 큰 것부터 순차적으로 기록
           (2번처럼 argNum이 큰 argument의 address부터 차례로 기록)
         - address[kth_argument] = (stack_top_address) - (sum_of_argument_size_1_to_k)
@@ -651,8 +674,7 @@ ARGUMENT PASSING 구현
 
 
 
-    /*
-    5. stack에 argv, argc, return address 기록
+    /* 5. stack에 argv address, argc, return address 기록
         - argv = address[argv[0]] = esp + 4 (현재 stack값에서 4만큼 더한 값)
         - argc = arg_count
         - return address = null (4 bytes를 모두 null로 채울 것. fake return address)  */

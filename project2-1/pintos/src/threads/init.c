@@ -307,8 +307,7 @@ static void
 run_task (char **argv)
 {
 
-  /* task = argv[1]는 original command_line의 특정 word의 시작을 가리키는 포인터임.
-     그렇기 때문에 뒤의 argument도 읽을 수 있는 것.  */
+  /* USERPROG의 경우 argv 예시: argv[0] = "run", argv[1] = "echo x y z" */
   const char *task = argv[1];
   
   printf ("Executing '%s':\n", task);
