@@ -42,12 +42,12 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> Answer: For pushing arguments into stack, we first seperated
 >> arguments and saved it in array in right order.
 >> And we pushed arguments into the stack in the reverse
->> order of saving in array because it makes easy push
+>> order of saving in array because it makes it easy to push
 >> elements of argv in right order.
->> Then we added word-align and pushed elements of argv.
+>> Then we added word-align and zeros and pushed elements of argv
+>> which are addresses of above arguments.
 >> We used the array we made for saving seperated arguments.
->> After that, pushed argv(the address of argv[0]) and argc, and
->> in fake return address.
+>> After that, we pushed the address of argv[0] and argc, and fake return address.
 >>
 >> Since size-fixed array was used for saving arguments, we
 >> could avoid overflow by adjusting size of array. We
