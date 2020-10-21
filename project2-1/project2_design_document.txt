@@ -8,8 +8,9 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Dokyeong Lee <dokeng7@unist.ac.kr>
+Hyejin Kim <hyejinkim99@unist.ac.kr>
+
 
 ---- PRELIMINARIES ----
 
@@ -29,19 +30,35 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+There is no struct modified or added.
+
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+For pushing arguments into stack, we first seperated arguments and saved it in array in right order.
+And we pushed arguments into the stack in the reverse order of saving in array because it makes easy push elements of argv in right order.
+Then we added word-align and pushed elements of argv. We used the array we made for saving seperated arguments.
+After that, pushed argv(the address of argv[0]) and argc, and in fake return address.
+
+Since size-fixed array was used for saving arguments, we could avoid overflow by adjusting size of array. We determined size of array considering size of command line with limited size 128 bytes.
+
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
 
+The functionality of two functions are same. The only difference is that strtok_r() needs an extra argument 'char **save_ptr' to store context. However, strtok() is an wrapper function of strtok_r(), and it passes a static variable for argument 'save_ptr'. So, it is unsafe to use strtok() at multithreading system while strtok_r() is reentrant. 
+
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+The kernel becomes simplified because it doesn't include implemention of parsing part. And its simplification enhances the operation of kernel. Also, kernel becomes more safe because kernel no longer has to care about security related to command separation.
+
 
            SYSTEM CALLS
            ============
@@ -52,9 +69,15 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+There is no struct modified or added.
+
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+We identified fd with thread id and we increased fd when a single file is opened again. So, file descriptors are unique within the entire OS. 
+
 
 ---- ALGORITHMS ----
 
@@ -70,6 +93,9 @@ FirstName LastName <email@domain.example>
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+??????????
+
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
