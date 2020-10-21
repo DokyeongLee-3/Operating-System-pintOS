@@ -87,7 +87,10 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
->> Answer: There is no struct modified or added.
+>> Answer: There is one static variable declared in 'userprog/syscall.c'
+>> static int return_val
+>>   It is a "file descriptor(fd)" used for SYS_OPEN system call.
+
 
 
 >> B2: Describe how file descriptors are associated with open files.
