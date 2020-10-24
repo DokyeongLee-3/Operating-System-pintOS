@@ -89,7 +89,7 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 
 >> Answer: There is one static variable declared in 'userprog/syscall.c'
 >> static int return_val
->>   It is a "file descriptor(fd)" used for SYS_OPEN system call.
+>>    This is a "file descriptor(fd)" used for SYS_OPEN system call.
 
 
 
@@ -97,9 +97,11 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
 
->> Answer: We identified fd with thread id and we increased fd 
->> when a single file is opened again. So, file descriptors are 
->> unique within the entire OS. 
+
+>> Answer: Once the file is open, its fd is initialized as thread
+>> id(tid). And its fd increases with each opening of the file.
+>> So, file descriptors are unique within a single process.
+
 
 
 ---- ALGORITHMS ----
@@ -116,9 +118,6 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
-
-??????????
-
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
