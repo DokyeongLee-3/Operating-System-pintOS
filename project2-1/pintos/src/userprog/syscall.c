@@ -129,12 +129,15 @@ syscall_handler (struct intr_frame *f UNUSED)
   /* 2. syscall number에 해당하는 syscall 구현
     - syscall에 사용되는 argument의 갯수는 정해져 있음
     - lib/user/syscall.c에서 확인 가능 (syscall0 이면 argument가 0개...)
-    - 따라서,
-      *(esp) = syscall number = arg[0]
-      *(esp + 1) = arg[1]
-      *(esp + 2) = arg[2]
-      *(esp + 3) = arg[3]
-      => (esp + 4)가 valid address 내에 있으면 ok! 
+    - argument가 1개
+      - arg[0] = *(esp + 1)
+    - argument가 2개
+      - arg[0] = *(esp + 4)
+      - arg[1] = *(esp + 5)
+    - argument가 3개
+      - arg[0] = *(esp + 5)
+      - arg[1] = *(esp + 6)
+      - arg[2] = *(esp + 7)
 
     2-1. SYS_HALT(0): arguemnt 0
     2-2. SYS_EXIT(1): argument 1
@@ -211,7 +214,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       thread_exit();
     }
 
-    // user pointer in pagedir의 physical address를 반환  QQQ
+    // user pointer in pagedir의 physical address를 반환
     if(pagedir_get_page(thread_current()->pagedir, *((uint32_t *)f->esp+4)) == NULL){
       printf("%s: exit(%d)\n", front, -1);
       f->eax = false;
@@ -253,7 +256,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     //printf("file name is %s\n", *((uint32_t *)f->esp+1));
     //printf("now file descriptor is %d\n", thread_current()->tid);
 
-    // user pointer in pagedir의 physical address를 반환  QQQ
+    // user pointer in pagedir의 physical address를 반환
     if(pagedir_get_page( thread_current()->pagedir, *((uint32_t *)f->esp+1) ) == NULL){
       printf("%s: exit(%d)\n", front, -1);
       f->eax = -1;
@@ -289,8 +292,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         f->eax = return_val+1;
         return_val = return_val+1; //why pass????????
       }
-
-     }
+    }
 
     //printf("open counter: %d\n",file_->inode->open_cnt);
 

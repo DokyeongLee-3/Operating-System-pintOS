@@ -129,13 +129,14 @@ start_process (void *file_name_)
 
 
 
-  // file_name을 copy해둔 char*로 parse를 진행해보자 QQQQQQQQQQQQQQQQQQQQQ
+  // file_name을 copy해둔 char*로 parse를 진행해보자
   /* memset(void *_Dst, int _Val, size_t _Size)
      dst라는 시작 위치부터(포인터로 주어짐) size byte만큼 value로 초기화 하는 함수. */
+  /*
   char my_copy[100];
   memset(my_copy, 0, sizeof file_name);
   strlcpy(my_copy, file_name, 10);
-
+  */
 
 
   /* user process를 불러오는 부분
