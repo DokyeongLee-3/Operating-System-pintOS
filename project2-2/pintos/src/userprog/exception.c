@@ -6,6 +6,9 @@
 #include "threads/thread.h"
 
 /* Number of page faults processed. */
+extern struct semaphore main_waiting_exec;
+extern struct semaphore exec_waiting_child_simple;
+
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
@@ -92,6 +95,7 @@ kill (struct intr_frame *f)
       thread_exit (); 
 
     case SEL_KCSEG:
+    
       /* Kernel's code segment, which indicates a kernel bug.
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
@@ -151,6 +155,15 @@ page_fault (struct intr_frame *f)
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
+  if(thread_current()->tid == 3)
+    sema_up(&main_waiting_exec);
+  else if(thread_current()->tid == 4)
+    sema_up(&exec_waiting_child_simple);
+  
+  printf("%s: exit(%d)\n",thread_current()->name, -1);
+
+  thread_exit();
+
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
