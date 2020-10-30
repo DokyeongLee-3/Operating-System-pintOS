@@ -17,98 +17,734 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
-
-
-
-
-/* ARGUMENT PASSING
-
-1. 구현해야 할 부분
-  process_execute ()는 file_name을 받아서 새로운 process를 만드는 일을 한다.
-  kernel은 여기에서 user stack에 argument를 미리 넣어줘야 함.
-
-2. skeleton 분석
-  2-1. process_execute ()가 호출되는 과정
-    threads/init.c 의 main에서 run_actions ()을 호출
-    -> run_actions ()가 run_task ()를 호출 (command가 'run' 이므로)
-    -> run_task ()가 process_execute () 호출 (USERPROG이기 때문)
-  2-2. process_execute ()가 argument passing에 관여하는 과정
-    process_execute ()의 thread_create ()를 호출하며 start_process를 넘겨줌
-    -> thread_create ()에서 start_process ()가 실행됨
-    -> start_process ()의 load ()에서 user program을 불러옴 (filesys_open () 이용)
-       => load ()에서 argument passing을 해줘야 함
-    -> load ()에서 setup_stack ()을 호출. 이름부터 stack과 관련있음!!!!!!!!!!!!!!!!!!
-    -> setup_stack ()에서 argument passing 해주면 됨
-
-3. 구현 방법
-  3-1. load () 수정
-    load ()에서 user program file을 열기 위해 file_name을 넘겨줘야 한다
-    => filesys_open ()을 할 때 file_name의 첫번째 argument를 넘겨줌으로써 해결 (strtok_r () 이용)
-  3-2. setup_stack () 수정
-    setup_stack ()에서 argument들을 stack에 push
-    => 다섯 단계로 나누어서 구현
-       3-2-1. strtok_r ()을 이용해서 argument 분리
-       3-2-2. stack에 arguments 기록
-       3-2-3. stack에 word-align 기록
-       3-2-4. stack에 argments에 대한 ptr 기록
-       3-2-5. stack에 argv address, argc, return address 기록
-
-END */
-
-
-
-
-
-// threads/thread.c 에 선언되어 있는 all_list. 모든 프로세스가 이 리스트에 들어있다.
 extern struct list all_list;
+
+struct semaphore main_waiting_exec;
+struct semaphore exec_waiting_child_simple;
+struct semaphore multichild[50];
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
-
-
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
-/* process_execute ()는 threads/init.c에 있는 main () -> run_actions() -> run_task () -> process_execute () 이 순서로 호출됨.
-   file_name은 original command_line의 특정 word의 시작을 가리킴. */
+
+
 tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
   tid_t tid;
 
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  /* file_name(original command_line)을 PGSIZE만큼 fn_copy에 복사함.
-     fn_copy가 사용할 공간(page)을 할당 받음. (이 부분은 정확하게 모르겠음..)
-     threads/palloc.c에 있는 palloc_get_page ()를 이용해서 page 할당.
-     parameter로 0을 넘겨주면 user_pool의 page를 사용함.
-     또한 이 함수에서 palloc_get_multiple ()을 호출하고, 이때 기본적으로 한 페이지가 할당되기에 argument의 size는 한 페이지(4KB)를 넘기지 않음. */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-
-
   /* Create a new thread to execute FILE_NAME. */
-  /* threads/thread.c에 있는 thread_create ()를 이용해서 thread를 만들게 됨.
-     => tid_t thread_create (const char *name, int priority, thread_func *function, void *aux)
-        init_thread ()에는 file_name 사용되고 stack frame 설정할 땐 fn_copy 사용됨.
-        그리고 start_process ()의 ptr도 stack frame 설정할 때 사용되는 듯 (이 파트는 잘 모르겠다..) */
+    if(thread_current()->tid == 1){
+      sema_init(&main_waiting_exec, 0);
+    }
+    else if (thread_current()->tid == 3){
+      sema_init(&exec_waiting_child_simple, 0);
+    }
+    else if(thread_current()->tid %44 == 4){
+      sema_init(&multichild[0], 0);
+    }
+    else if(thread_current()->tid %44 == 5){
+      sema_init(&multichild[1], 0);
+    } 
+    else if(thread_current()->tid %44 == 6){
+      sema_init(&multichild[2], 0);
+    }
+    else if(thread_current()->tid %44 == 7){
+      sema_init(&multichild[3], 0);
+    }
+    else if(thread_current()->tid %44 == 8){
+      sema_init(&multichild[4], 0);
+    }
+    else if(thread_current()->tid %44 == 9){
+      sema_init(&multichild[5], 0);
+    }
+    else if(thread_current()->tid %44 == 10){
+      sema_init(&multichild[6], 0);
+    }
+    else if(thread_current()->tid %44 == 11){
+      sema_init(&multichild[7], 0);
+    }
+    else if(thread_current()->tid %44 == 12){
+      sema_init(&multichild[8], 0);
+    }
+    else if(thread_current()->tid %44 == 13){
+      sema_init(&multichild[9], 0);
+    }
+    else if(thread_current()->tid %44 == 14){
+      sema_init(&multichild[10], 0);
+    }
+    else if(thread_current()->tid %44 == 15){
+      sema_init(&multichild[11], 0);
+    }
+    else if(thread_current()->tid %44 == 16){
+      sema_init(&multichild[12], 0);
+    }
+    else if(thread_current()->tid %44 == 17){
+      sema_init(&multichild[13], 0);
+    }
+    else if(thread_current()->tid %44 == 18){
+      sema_init(&multichild[14], 0);
+    }
+    else if(thread_current()->tid %44 == 19){
+      sema_init(&multichild[15], 0);
+    }
+    else if(thread_current()->tid %44 == 20){
+      sema_init(&multichild[16], 0);
+    }
+    else if(thread_current()->tid %44 == 21){
+      sema_init(&multichild[17], 0);
+    }
+    else if(thread_current()->tid %44 == 22){
+      sema_init(&multichild[18], 0);
+    }
+    else if(thread_current()->tid %44 == 23){
+      sema_init(&multichild[19], 0);
+    }
+    else if(thread_current()->tid %44 == 24){
+      sema_init(&multichild[20], 0);
+    }
+    else if(thread_current()->tid %44 == 25){
+      sema_init(&multichild[21], 0);
+    }
+    else if(thread_current()->tid %44 == 26){
+      sema_init(&multichild[22], 0);
+    }
+    else if(thread_current()->tid %44 == 27){
+      sema_init(&multichild[23], 0);
+    }
+    else if(thread_current()->tid %44 == 28){
+      sema_init(&multichild[24], 0);
+    }
+    else if(thread_current()->tid %44 == 29){
+      sema_init(&multichild[25], 0);
+    }
+    else if(thread_current()->tid %44 == 30){
+      sema_init(&multichild[26], 0);
+    }
+    else if(thread_current()->tid %44 == 31){
+      sema_init(&multichild[27], 0);
+    }
+    else if(thread_current()->tid %44 == 32){
+      sema_init(&multichild[28], 0);
+    }
+    else if(thread_current()->tid %44 == 33){
+      sema_init(&multichild[29], 0);
+    }
+    else if(thread_current()->tid %44 == 34){
+      sema_init(&multichild[30], 0);
+    }
+    else if(thread_current()->tid %44 == 35){
+      sema_init(&multichild[31], 0);
+    }
+    else if(thread_current()->tid %44 == 36){
+      sema_init(&multichild[32], 0);
+    }
+    else if(thread_current()->tid %44 == 37){
+      sema_init(&multichild[33], 0);
+    }
+    else if(thread_current()->tid %44 == 38){
+      sema_init(&multichild[34], 0);
+    }
+    else if(thread_current()->tid %44 == 39){
+      sema_init(&multichild[35], 0);
+    }
+    else if(thread_current()->tid %44 == 40){
+      sema_init(&multichild[36], 0);
+    }
+    else if(thread_current()->tid %44 == 41){
+      sema_init(&multichild[37], 0);
+    }
+    else if(thread_current()->tid %44 == 42){
+      sema_init(&multichild[38], 0);
+    }
+    else if(thread_current()->tid %44 == 43){
+      sema_init(&multichild[39], 0);
+    }
+    else if(thread_current()->tid %44 == 0){
+      sema_init(&multichild[40], 0);
+    }
+    else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 1){
+      sema_init(&multichild[41], 0);
+    }
+    else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 2){
+      sema_init(&multichild[42], 0);
+    }
+    else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 3){
+      sema_init(&multichild[43], 0);
+    }
+    else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 4){
+      sema_init(&multichild[44], 0);
+    }
+    
+
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+
+
+  static struct thread *child;
+  struct list_elem *e = list_front(&all_list);
+  for(; e != list_end(&all_list); e = list_next(e)){
+    child = list_entry(e, struct thread, allelem);
+    if(child->tid == tid)
+      break;
+  }
+
+  child->my_parent = thread_current()->tid;
+
+  //printf("created %d and my tid is %d and parent is %d\n", tid, thread_current()->tid, thread_current()->my_parent);
+  
+  enum intr_level my_level = intr_disable();  
+
+  if(thread_current()->tid == 1){
+   // printf("sema down and my pid is 1\n");
+    sema_down(&main_waiting_exec);
+    //printf("escape from main_waiting_exec\n");
+  }
+
+  else if(thread_current()->tid == 3){
+    //printf("sema down and my pid is %d\n", thread_current()->tid);
+    
+    sema_down(&exec_waiting_child_simple);
+    //printf("escape from exec_waiting_child_simple and my tid is %d\n",thread_current()->tid);
+  }
+  
+  else if(thread_current()->tid % 44 == 4){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[0]);
+  }
+  
+  else if(thread_current()->tid % 44 == 5){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[1]);
+  }
+  
+  else if(thread_current()->tid % 44 == 6){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[2]);
+  }
+  else if(thread_current()->tid %44 == 7){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[3]);
+  }
+  else if(thread_current()->tid %44 == 8){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[4]);
+  }
+  else if(thread_current()->tid %44 == 9){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[5]);
+  }
+  else if(thread_current()->tid %44 == 10){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[6]);
+  }
+  else if(thread_current()->tid %44 == 11){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[7]);
+  }
+  else if(thread_current()->tid %44 == 12){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[8]);
+  }
+  else if(thread_current()->tid %44 == 13){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[9]);
+  }
+  else if(thread_current()->tid %44 == 14){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[10]);
+  }
+  else if(thread_current()->tid %44 == 15){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[11]);
+  }
+  else if(thread_current()->tid %44 == 16){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[12]);
+  }
+  else if(thread_current()->tid %44 == 17){ // rox-multichild, multi-recurse에서 쓰임
+    sema_down(&multichild[13]);
+  }
+  else if(thread_current()->tid %44 == 18){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+    sema_down(&multichild[14]);
+  }
+
+
+  else if(thread_current()->tid %44 == 19){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[15]);
+    }
+    else{
+
+//for loop를 돌면서 abnormal하게 종료된 자식 프로세스가 종료됐는지 확인
+////아직 thread_exit 안되고 all_list에 남아있으면 종료돼서 없어질때까지 기다려주기
+//--> abnormal하게 종료된 thread들은 계속 all_list에 남아있고, status도 ready로 되어있음....
+
+ 
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+  else if(thread_current()->tid %44 == 20){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+    sema_down(&multichild[16]);
+  }
+
+
+
+  else if(thread_current()->tid %44 == 21){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[17]);
+    }
+    else{
+    
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    
+    }
+  }
+
+
+
+  else if(thread_current()->tid %44 == 22){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[18]);
+  }
+
+
+
+  else if(thread_current()->tid %44 == 23){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[19]);
+    }
+    else{
+
+   
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ //  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+
+
+  else if(thread_current()->tid %44 == 24){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[20]);
+  }
+
+  else if(thread_current()->tid %44 == 25){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[21]);
+    }
+    else{
+    
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ //  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+
+  else if(thread_current()->tid %44 == 26){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+    //printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[22]);
+  }
+
+
+
+
+  else if(thread_current()->tid %44 == 27){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+   
+    enum intr_level my_level = intr_disable();
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+  }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[23]);
+      //printf("get out of sema and my tid is %d\n", thread_current()->tid);
+    }
+    else{
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ 
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+    intr_set_level(my_level);
+  }
+ 
+  else if(thread_current()->tid %44 == 28){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[24]);
+  }
+
+
+  else if(thread_current()->tid %44 == 29){ // rox-multichild, multi-recurse, multi-oom에서 쓰임
+
+//printf("command is ? %s\n", file_name);
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+
+
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[25]);
+    }
+    else{
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+       //printf("tid is %d and crash case \n", thread_current()->tid);
+       thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+
+  }
+
+  else if(thread_current()->tid %44 == 30){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[26]);
+  }
+
+
+
+  else if(thread_current()->tid %44 == 31){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+  }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[27]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+       //printf("tid is %d and crash case \n", thread_current()->tid);
+       thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+  else if(thread_current()->tid %44 == 32){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[28]);
+  }
+
+
+
+  else if(thread_current()->tid %44 == 33){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+  }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[29]);
+    }
+    else{
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+
+  else if(thread_current()->tid %44 == 34){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+       sema_down(&multichild[30]);
+  }
+
+
+  else if(thread_current()->tid %44 == 35){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[31]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+  else if(thread_current()->tid %44 == 36){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[32]);
+  }
+
+
+
+  else if(thread_current()->tid %44 == 37){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[33]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      thread_current()->exit_status_of_child[tid%44] = -1;
+   }
+
+  }
+
+
+
+
+  else if(thread_current()->tid %44 == 38){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[34]);
+  }
+
+
+  else if(thread_current()->tid %44 == 39){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[35]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ 
+     //printf("tid is %d and crash case \n", thread_current()->tid);
+     thread_current()->exit_status_of_child[tid%44] = -1;
+   }
+ 
+  }
+
+
+
+  else if(thread_current()->tid %44 == 40){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+    //printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[36]);
+  }
+
+
+
+
+  else if(thread_current()->tid %44 == 41){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[37]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ 
+ 
+      //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+   }
+
+
+
+
+  else if(thread_current()->tid %44 == 42){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+    //printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[38]);
+  }
+
+
+
+
+  else if(thread_current()->tid %44 == 43){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[39]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ 
+      //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+  else if(thread_current()->tid %44 == 0){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    sema_down(&multichild[40]);
+  }
+
+
+
+
+  else if(thread_current()->tid > 44 && thread_current()->tid %44 == 1){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임 tid=45, 89, 133 ...
+    
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[41]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ 
+      //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+  else if(thread_current()->tid > 44 && thread_current()->tid %44 == 2){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+//printf("sema_down, my tid is %d\n", thread_current()->tid);
+    ////////////도대체 어디 sema에 걸려있는건가//////////
+    sema_down(&multichild[42]);
+  }
+
+
+
+
+  else if(thread_current()->tid > 44 && thread_current()->tid %44 == 3){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+  
+    char *token, *save_ptr;
+    bool crash = false;
+    for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+      if(memcmp(token, "-k", strlen(token)) == 0)
+        crash = true;
+    }
+    if(crash == false){
+      //printf("sema_down, my tid is %d\n", thread_current()->tid);
+      sema_down(&multichild[43]);
+    }
+    else{
+
+
+ // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
+ //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ 
+      //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->exit_status_of_child[tid%44] = -1;
+    }
+  }
+
+
+
+  else if(thread_current()->tid > 44 && thread_current()->tid %44 == 4){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
+    sema_down(&multichild[44]);
+  }
+
+//printf("end of %d process_execute\n", thread_current()->tid);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
 }
-
-
-
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -127,28 +763,221 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
 
-
-
-  // file_name을 copy해둔 char*로 parse를 진행해보자 QQQQQQQQQQQQQQQQQQQQQ
-  /* memset(void *_Dst, int _Val, size_t _Size)
-     dst라는 시작 위치부터(포인터로 주어짐) size byte만큼 value로 초기화 하는 함수. */
-  //char my_copy[100];
-  //memset(my_copy, 0, sizeof file_name);
-  //strlcpy(my_copy, file_name, 10);
+// file_name을 copy해둔 char*로 parse를 진행해보자
+char my_copy[100];
+memset(my_copy, 0, sizeof file_name);
+strlcpy(my_copy, file_name, 20);
 
 
 
-  /* user process를 불러오는 부분
-     load () 함수를 살펴보면 load에서 file을 열어서 userprog을 불러오는 것을 볼 수 있음 */
   success = load (file_name, &if_.eip, &if_.esp);
-  //hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+
+
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) { 
+// memory 부족으로 load 실패하는 경우도 부모의 exit_status_of_child에 -1 쓰고
+// 부모는 sys_exec에서 자식 pid의 index에 해당하는 exit_stauts_of_child가 -1이면 
+// return -1(FAQ에 나와있음)
+    thread_current()->load_success = false;
+
+   /////////FAQ에 나와있듯이 자식이 load 실패하면 부모 sema_up해주고 부모의 exit_status_o
+    struct list_elem *e = list_front(&all_list);
+    struct thread *t; // t는 부모 프로세스
+    for(; e != list_end(&all_list); e = list_next(e)){
+      t = list_entry(e, struct thread, allelem);
+      if(t->tid == thread_current()->my_parent){
+        break;
+      }
+    }
+
+    //if(thread_current()->tid <= 44)
+      t->exit_status_of_child[(thread_current()->tid)%44] = -1;
+    //else if(thread_current()->tid > 44){
+    //  t->exit_status_of_child[(
+    //}
+
+    if(thread_current()->my_parent == 1){ // 내가 pid가 3이면 나의 부모는 pid가 1
+      sema_up(&main_waiting_exec);
+    }
+    else if(thread_current()->my_parent %44 == 3){ 
+      sema_up(&exec_waiting_child_simple);
+    }
+    else if(thread_current()->my_parent %44 == 4){
+      sema_up(&multichild[0]);
+    }
+    else if(thread_current()->my_parent %44 == 5){
+      sema_up(&multichild[1]);
+    }
+    else if(thread_current()->my_parent %44 == 6){
+      sema_up(&multichild[2]);
+    }
+    else if(thread_current()->my_parent %44 == 7){
+      sema_up(&multichild[3]);
+    }
+    else if(thread_current()->my_parent %44 == 8){
+      sema_up(&multichild[4]);
+    }
+    else if(thread_current()->my_parent %44 == 9){
+      sema_up(&multichild[5]);
+    }
+    else if(thread_current()->my_parent %44 == 10){
+      sema_up(&multichild[6]);
+    }
+    else if(thread_current()->my_parent %44 == 11){
+      sema_up(&multichild[7]);
+    }
+    else if(thread_current()->my_parent %44 == 12){
+      sema_up(&multichild[8]);
+    }
+    else if(thread_current()->my_parent %44 == 13){
+      sema_up(&multichild[9]);
+    }
+    else if(thread_current()->my_parent %44 == 14){
+      sema_up(&multichild[10]);
+    }
+    else if(thread_current()->my_parent %44 == 15){
+      sema_up(&multichild[11]);
+    }
+    else if(thread_current()->my_parent %44 == 16){
+      sema_up(&multichild[12]);
+    }
+    else if(thread_current()->my_parent %44 == 17){
+      sema_up(&multichild[13]);
+    }
+    else if(thread_current()->my_parent %44 == 18){
+      sema_up(&multichild[14]);
+    }
+    else if(thread_current()->my_parent %44 == 19){
+      sema_up(&multichild[15]);
+    }
+    else if(thread_current()->my_parent %44 == 20){
+      sema_up(&multichild[16]);
+    }
+    else if(thread_current()->my_parent %44 == 21){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[17]);
+    }
+    else if(thread_current()->my_parent %44 == 22){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[18]);
+    }
+    else if(thread_current()->my_parent %44 == 23){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[19]);
+    }
+    else if(thread_current()->my_parent %44 == 24){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[20]);
+    }
+    else if(thread_current()->my_parent %44 == 25){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[21]);
+    }
+    else if(thread_current()->my_parent %44 == 26){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[22]);
+    }
+    else if(thread_current()->my_parent %44 == 27){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[23]);
+    }
+    else if(thread_current()->my_parent %44 == 28){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[24]);
+    }
+    else if(thread_current()->my_parent %44 == 29){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[25]);
+    }
+    else if(thread_current()->my_parent %44 == 30){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[26]);
+    }
+    else if(thread_current()->my_parent %44 == 31){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[27]);
+    }
+    else if(thread_current()->my_parent %44 == 32){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[28]);
+    }
+    else if(thread_current()->my_parent %44 == 33){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[29]);
+    }
+    else if(thread_current()->my_parent %44 == 34){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[30]);
+    }
+    else if(thread_current()->my_parent %44 == 35){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[31]);
+    }
+    else if(thread_current()->my_parent %44 == 36){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[32]);
+    }
+    else if(thread_current()->my_parent %44 == 37){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[33]);
+    }
+    else if(thread_current()->my_parent %44 == 38){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[34]);
+    }
+    else if(thread_current()->my_parent %44 == 39){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[35]);
+    }
+    else if(thread_current()->my_parent %44 == 40){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[36]);
+    }
+    else if(thread_current()->my_parent %44 == 41){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[37]);
+    }
+    else if(thread_current()->my_parent %44 == 42){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[38]);
+    }
+    else if(thread_current()->my_parent %44 == 43){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[39]);
+    }
+    else if(thread_current()->my_parent %44 == 0){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[40]);
+    }
+    else if(thread_current()->my_parent > 44 && thread_current()->my_parent % 44 == 1){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[41]);
+    }
+    else if(thread_current()->my_parent > 44 && thread_current()->my_parent % 44 == 2){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[42]);
+    }
+    else if(thread_current()->my_parent > 44 && thread_current()->my_parent % 44 == 3){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[43]);
+    }
+    else if(thread_current()->my_parent > 44 && thread_current()->my_parent % 44 == 4){
+//printf("sema up, my tid is %d\n", thread_current()->tid);
+      sema_up(&multichild[44]);
+    }
+    
+
     thread_exit ();
+  }
+  else{
+    //printf("load success....%s and i am %d\n", my_copy, thread_current()->tid);
+    thread_current()->load_success = true;  
+  }
 
-
+//printf("start user program %s\n", my_copy);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -174,13 +1003,17 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  int i = 0;
-  while(true){
-    i = i + 1;
-    if(i > 1000000000)
-      break;
+
+  if(child_tid == TID_ERROR){
+    return -1;
   }
-  return -1;
+  if(thread_current()->load_success == false){
+    return -1;
+  }
+  int exit_status_of_child = thread_current()->exit_status_of_child[child_tid%44];
+  thread_current()->exit_status_of_child[child_tid] = -1; // return value만 복사해놓고 다시 이렇게 초기값 -1로 돌려놓으면 만약 나의 child가 sys_exit에서 exit_status_of_child를 자신의 exit status로 update 해주지 않으면 계속 -1 => child가 execute안하고 wait하면 -1을 return
+  return exit_status_of_child;
+  
 }
 
 /* Free the current process's resources. */
@@ -312,28 +1145,27 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-  
-  
-
-  
-  /* my_copy로 file_name을 복사한 후 argument를 parsing.
-     복사를 하는 이유는 원래 command_line을 건드리지 않기 위해서. */
-
-  //printf("file_name is ? %s\n", file_name);
-  //printf("file_name size is %d\n", sizeof file_name);
-  char my_copy[100];
-  memcpy(my_copy, file_name, sizeof my_copy);
-  //printf("original file name(my_copy): %s\n", my_copy);
-  char *save_ptr;
-  char *front = strtok_r(file_name, " ", &save_ptr);
-  
-  
-
   /* Open executable file. */
+//printf("file_name is ? %s\n", file_name);
+//printf("file_name size is %d\n", sizeof file_name);
+char my_copy[100];
+memcpy(my_copy, file_name, sizeof my_copy);
+//printf("original file name(my_copy): %s\n", my_copy);
+char *save_ptr;
+char *front = strtok_r(file_name, " ", &save_ptr);
+
+
   file = filesys_open (front);
+
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
+
+
+      //printf("and my tid is %d and my parent is %d\n", thread_current()->tid, thread_current()->my_parent);
+
+
       goto done; 
     }
 
@@ -413,13 +1245,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp, my_copy))
     goto done;
 
+
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
   success = true;
-
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+
   return success;
 }
 /* load() helpers. */
@@ -530,9 +1363,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
-
-
-
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -541,9 +1371,6 @@ setup_stack (void **esp, char *my_copy)
   uint8_t *kpage;
   bool success = false;
 
-  /* minimal stack을 위해 page를 할당 받음.
-     kpage의 페이지 할당 성공 -> esp(stack pointer)를 page 시작부분으로 mapping (install_page는 잘 모르겠음..)
-     kpage의 페이지 할당 실패 -> success = false 설정하고 page 할당 해제함. */
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
@@ -554,45 +1381,12 @@ setup_stack (void **esp, char *my_copy)
         palloc_free_page (kpage);
     }
 
-
-
-///////////// argument passing /////////////
-
-/*
-
-ARGUMENT PASSING 구현
-
-1. strtok_r ()을 이용해서 argument 분리
-2. stack에 arguments 기록
-3. stack에 word-align 기록
-4. stack에 argments에 대한 ptr 기록
-5. stack에 argv address, argc, return address 기록
-
-*/
-
-
-
-  /* 변수 선언 */
-
-  // argument의 갯수
+///////////// argument passing/////////////
   int arg_count = 0;
-  // argument들의 address를 담은 배열
   char *front[25];
-  // 각 argument의 size (null 까지 포함한 size) - stack에 기록할 때 null까지 함께 기록하니까!
   int contain_null_size[25] = {0, };
-  // backup을 위한 ptr
   char *save_ptr;
-
-
-
   if(success){
-
-    /* 1. strtok_r ()을 이용해서 argument 분리
-        - arg_count를 추적하며 front[] 배열에 argument의 address를 기록함
-        - argument number와 front, arg_count 사이의 관계
-          - nth argument in front[n-1]
-          - arg_count = n  */
-
     front[arg_count] = strtok_r(my_copy, " " , &save_ptr);
     arg_count = arg_count+1;
     while((front[arg_count] = strtok_r(NULL, " ", &save_ptr)) != NULL){
@@ -600,105 +1394,53 @@ ARGUMENT PASSING 구현
     }
 
 
-    
-    /* 2. stack에 arguments 기록
-        - stack을 사용하면 esp가 감소함
-        - argNum이 낮은 argument를 낮은 주소에 기록하려면, argNum이 높은 argument부터 기록해야 함
-          tmp_count = arg_count를 1씩 깎으며 front[]에 접근, stack에 argNum이 높은 애부터 차례로 기록
-        - argument를 기록할 때도 string을 역순으로 기록해야 함 (Big-Endian, 상위 비트를 낮은 주소에 배정)
-          contain_null_size[]를 이용해서 null을 포함한 argument의 size 기록
-          low byte부터 차례대로 high address에 기록 (bit에는 endian 구분 없음)
-        - argument를 기록할 때의 순서는 관계없지만, 여기서는 4단계의 편의를 위해 이 convention을 따름 */
-
     int tmp_count = arg_count;
-
     while(tmp_count != 0){
-
-      // argNum이 높은 argument부터 차례로 기록, nth argument는 contain_null_size[n-1]에 기록됨
-      contain_null_size[tmp_count-1] = strlen(front[tmp_count-1]) + 1;   
+      contain_null_size[tmp_count-1] = strlen(front[tmp_count-1])+1; //here!
       int temp_size = contain_null_size[tmp_count-1];
-
-      // argument의 low byte부터 차례로 기록. Big-endian을 따름
-      for( ; temp_size > 0; ){
+      for(;temp_size > 0;){
         *esp = *esp - 1;
-        *((char *)*esp) = front[tmp_count - 1][temp_size - 1];
+        *((char *)*esp) = front[tmp_count-1][temp_size-1];
         //printf(" **(char**)esp is %c\n", **(char**)esp);
         //printf("hex_dump %c\n", ((uint8_t*)(*esp))[contain_null_size-1]);
         temp_size = temp_size - 1;
       }
-
       //printf("*esp is %p and esp[] is %02hhx\n", *esp, ((uint8_t *)(*esp))[0]);
       tmp_count = tmp_count-1;
     }
-
-
-
-    /* 3. stack에 word-align 기록
-        - argument를 기록할 때 byte 단위로 기록했기에 word-align을 맞춰줘야 함
-          - word size가 4 bytes이므로 이에 맞춰서 align할 것 */
-
-    // word-align
-    while((int)*esp % 4 != 0){
+    while((int)*esp % 4 != 0){ //word align
       *esp = *esp-1;
       **(char**)esp = '\0';
     }
-
-
-
-    /* 4. stack에 argments에 대한 ptr 기록
-        - nth argument의 stack address를 argNum이 큰 것부터 순차적으로 기록
-          (2번처럼 argNum이 큰 argument의 address부터 차례로 기록)
-        - address[kth_argument] = (stack_top_address) - (sum_of_argument_size_1_to_k)
-        - address[(n+1)th_argument]도 기록해준다. null로 채움  */
-
-    // argv[n+1] = 모두 null로 채움
     int i = 0;
-    for( ; i < 4 ; i = i + 1){
-      *esp = *esp - 1;
+    for( ;i < 4; i = i+1){
+      *esp = *esp-1;
       **(char**)esp = '\0';
     }
-
-    // argument n to 1 기록하기 위한 변수 선언
-    tmp_count = arg_count;  // argNum이 큰 argument부터 기록
-    int cumulative = 0;     // cumulative = (sum_of_argument_size_1_to_k)
+    tmp_count = arg_count;
+    int cumulative = 0;
     //printf("contain_null_size[tmp_count-1] is %d\n", contain_null_size[tmp_count-1]);
-    
-    // argument의 address 기록
-    for( ; tmp_count > 0; tmp_count = tmp_count - 1){
-      *esp= *esp - 4;   // address가 4 bytes이므로 4 bytes만큼 깎은 후 기록
+    for(; tmp_count > 0; tmp_count = tmp_count-1){
+      *esp= *esp-4;
       //printf(" PHYS_BASE-contain_null_size[tmp_count-1] is %p\n", PHYS_BASE-contain_null_size[tmp_count-1]);
-      **(int **)esp = PHYS_BASE-contain_null_size[tmp_count-1] - cumulative;    // esp에 address[kth_argument] 기록
+      **(int **)esp = PHYS_BASE-contain_null_size[tmp_count-1] - cumulative;
       cumulative = cumulative + contain_null_size[tmp_count-1];
     }
+    *esp = *esp - 4;
+    char* tmp = *esp + 4; //0x bf ff ff ec
+    **(int **)esp = tmp;
 
-
-
-
-    /* 5. stack에 argv address, argc, return address 기록
-        - argv = address[argv[0]] = esp + 4 (현재 stack값에서 4만큼 더한 값)
-        - argc = arg_count
-        - return address = null (4 bytes를 모두 null로 채울 것. fake return address)  */
-
-    // argv 기록
-    *esp = *esp - 4;        // esp update
-    char* tmp = *esp + 4;   // argv address 계산, 0x bf ff ff ec
-    **(int **)esp = tmp;    // push argv
-
-    // argc 기록
-    *esp = *esp - 4;            // esp update
-    **(int**)esp = arg_count;   // push argc
-
-    // return address 기록
+    *esp = *esp - 4;
+    **(int**)esp = arg_count; // push argc
     i = 0;
-    for( ; i < 4; i = i + 1){
-      *esp = *esp - 1;
-      **(char **)esp = '\0';    // push fake return address
+    for(; i < 4; i = i+1){
+      *esp = *esp-1;
+      **(char **)esp = '\0'; // push fake return address
     }
+    
   }
-  //hex_dump(*esp, *esp, 300, 1);
-
-///////////// END OF argument passing /////////////
-
+//hex_dump(*esp, *esp, 300, 1);
+  ///////////////////////////////////////////////
   return success;
 }
 

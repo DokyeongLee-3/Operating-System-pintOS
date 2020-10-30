@@ -26,7 +26,7 @@ static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
-static struct list all_list;
+struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -469,6 +469,22 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  int i = 0;
+  for(; i< 10; i++)
+    t->file_descriptor_table[i] = NULL;
+
+  i = 0;
+  for(; i < 10; i++)
+    t->array_of_fd[i] = 0;
+
+  i = 0;
+  for(; i < 50; i++)
+    t->exit_status_of_child[i] = -1;
+
+  t->load_success = true; 
+
+
   list_push_back (&all_list, &t->allelem);
 }
 

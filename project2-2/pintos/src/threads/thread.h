@@ -96,6 +96,11 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct file* file_descriptor_table[10]; // 이 thread가 연 파일의 struct file pointer들을모아놓은 배열
+    int16_t array_of_fd[10]; //
+    int8_t exit_status_of_child[50]; // overflow로 수정!
+    bool load_success;
+    int16_t my_parent;
 #endif
 
     /* Owned by thread.c. */
