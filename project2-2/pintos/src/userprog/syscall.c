@@ -542,9 +542,14 @@ enum intr_level my_level = intr_disable();
          //실행중인 나 자신을 열겠다? --> 나중에 이 파일에 write하려면 file_deny_write여부 확인하고 True면 못쓰게 하기
          //printf("file name is %s\n", *(uint32_t *)(f->esp+4));
          //printf("deny_write?  %d\n", file_->deny_write);
-         if(file_ != NULL)
-           file_deny_write(file_);
-         //printf("now deny_write?  %d\n", file_->deny_write);
+          if(file_ != NULL){
+            file_deny_write(file_);
+            f->eax = thread_current()->tid; // return file descriptor
+            now->file_descriptor_table[return_val] = file_;
+            now->array_of_fd[return_val] = thread_current()->tid;
+            return_val = return_val + 1; //  다음번엔 file_descritor_table의 다음번  index>에 file* 를 채울
+          }
+          
         }
 
         else{
@@ -685,7 +690,6 @@ enum intr_level my_level = intr_disable();
       }
     
       if(thread_current()->file_descriptor_table[index]->deny_write == true){  //rox-simple.c -> 내가 rox-simple 파일을 실행하는 프로세스인데, rox-simple 실행하면서 열고 거기에 쓰면 그냥 return 0
-printf("not here?\n");
         f->eax = 0;
       }
       else{
