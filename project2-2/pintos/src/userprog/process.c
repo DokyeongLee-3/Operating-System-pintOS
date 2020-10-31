@@ -23,7 +23,7 @@ extern struct list all_list;
 
 struct semaphore main_waiting_exec;
 struct semaphore exec_waiting_child_simple;
-struct semaphore multichild[50];
+struct semaphore multichild[45];
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -180,6 +180,7 @@ process_execute (const char *file_name)
     else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 1){
       sema_init(&multichild[41], 0);
     }
+/*
     else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 2){
       sema_init(&multichild[42], 0);
     }
@@ -189,10 +190,9 @@ process_execute (const char *file_name)
     else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 4){
       sema_init(&multichild[44], 0);
     }
-    
+*/    
 
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-
 
   static struct thread *child;
   struct list_elem *e = list_front(&all_list);
@@ -209,7 +209,7 @@ process_execute (const char *file_name)
   enum intr_level my_level = intr_disable();  
 
   if(thread_current()->tid == 1){
-   // printf("sema down and my pid is 1\n");
+    //printf("sema down and my pid is 1\n");
     sema_down(&main_waiting_exec);
     //printf("escape from main_waiting_exec\n");
   }
@@ -283,14 +283,9 @@ process_execute (const char *file_name)
     }
     else{
 
-//for loop를 돌면서 abnormal하게 종료된 자식 프로세스가 종료됐는지 확인
-////아직 thread_exit 안되고 all_list에 남아있으면 종료돼서 없어질때까지 기다려주기
-//--> abnormal하게 종료된 thread들은 계속 all_list에 남아있고, status도 ready로 되어있음....
-
- 
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
-
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
@@ -317,7 +312,7 @@ process_execute (const char *file_name)
     
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
-
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     
     }
@@ -347,7 +342,8 @@ process_execute (const char *file_name)
 
    
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
- //  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
@@ -374,10 +370,9 @@ process_execute (const char *file_name)
     }
     else{
     
-
-
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
- //  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+ // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
@@ -411,7 +406,7 @@ process_execute (const char *file_name)
 
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
- 
+      thread_current()->abnormal_child = tid; 
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
     intr_set_level(my_level);
@@ -442,7 +437,8 @@ process_execute (const char *file_name)
 
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
-       //printf("tid is %d and crash case \n", thread_current()->tid);
+ //printf("tid is %d and crash case \n", thread_current()->tid);
+       thread_current()->abnormal_child = tid;
        thread_current()->exit_status_of_child[tid%44] = -1;
     }
 
@@ -472,6 +468,7 @@ process_execute (const char *file_name)
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
        //printf("tid is %d and crash case \n", thread_current()->tid);
+       thread_current()->abnormal_child = tid;
        thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
@@ -501,6 +498,7 @@ process_execute (const char *file_name)
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
       //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
@@ -532,6 +530,7 @@ process_execute (const char *file_name)
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
       //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
@@ -561,6 +560,7 @@ process_execute (const char *file_name)
 
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
    }
 
@@ -592,8 +592,8 @@ process_execute (const char *file_name)
 
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
- 
      //printf("tid is %d and crash case \n", thread_current()->tid);
+     thread_current()->abnormal_child = tid;
      thread_current()->exit_status_of_child[tid%44] = -1;
    }
  
@@ -626,9 +626,8 @@ process_execute (const char *file_name)
 
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
- 
- 
       //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
    }
@@ -662,6 +661,7 @@ process_execute (const char *file_name)
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
  
       //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
@@ -690,17 +690,17 @@ process_execute (const char *file_name)
     }
     else{
 
-
  // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
  
       //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
 
 
-
+/*
   else if(thread_current()->tid > 44 && thread_current()->tid %44 == 2){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
 //printf("sema_down, my tid is %d\n", thread_current()->tid);
     ////////////도대체 어디 sema에 걸려있는건가//////////
@@ -721,23 +721,15 @@ process_execute (const char *file_name)
     if(crash == false){
       //printf("sema_down, my tid is %d\n", thread_current()->tid);
       sema_down(&multichild[43]);
+       
     }
     else{
-
-
- // 만약에 위에서 thread_create로 만든 자식 프로세스가 crash하는거라면 exit_status_of_child에 그 >쓰레드가 sys_exit없이 abnormal하게 종료한다는걸 -1로 표시한다
- //  // 여기서 tid는 위에서 thread_create로 만든 자식 프로세스의 tid
- 
       //printf("tid is %d and crash case \n", thread_current()->tid);
+      thread_current()->abnormal_child = tid;
       thread_current()->exit_status_of_child[tid%44] = -1;
     }
   }
-
-
-
-  else if(thread_current()->tid > 44 && thread_current()->tid %44 == 4){ // rox-multichild, multi-recurse, multi-oom에서 >쓰임
-    sema_down(&multichild[44]);
-  }
+*/
 
 //printf("end of %d process_execute\n", thread_current()->tid);
 
@@ -763,14 +755,14 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
 
 
-// file_name을 copy해둔 char*로 parse를 진행해보자
-char my_copy[100];
-memset(my_copy, 0, sizeof file_name);
-strlcpy(my_copy, file_name, 20);
+  // file_name을 copy해둔 char*로 parse를 진행해보자
+  /*
+  char my_copy[100];
+  memset(my_copy, 0, sizeof file_name);
+  strlcpy(my_copy, file_name, 20);
+  */
 
-
-
-  success = load (file_name, &if_.eip, &if_.esp);
+    success = load (file_name, &if_.eip, &if_.esp);
 //hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
 
@@ -781,7 +773,6 @@ strlcpy(my_copy, file_name, 20);
 // memory 부족으로 load 실패하는 경우도 부모의 exit_status_of_child에 -1 쓰고
 // 부모는 sys_exec에서 자식 pid의 index에 해당하는 exit_stauts_of_child가 -1이면 
 // return -1(FAQ에 나와있음)
-    thread_current()->load_success = false;
 
    /////////FAQ에 나와있듯이 자식이 load 실패하면 부모 sema_up해주고 부모의 exit_status_o
     struct list_elem *e = list_front(&all_list);
@@ -794,7 +785,7 @@ strlcpy(my_copy, file_name, 20);
     }
 
     //if(thread_current()->tid <= 44)
-      t->exit_status_of_child[(thread_current()->tid)%44] = -1;
+    t->exit_status_of_child[(thread_current()->tid)%44] = -1;
     //else if(thread_current()->tid > 44){
     //  t->exit_status_of_child[(
     //}
@@ -1154,14 +1145,18 @@ memcpy(my_copy, file_name, sizeof my_copy);
 char *save_ptr;
 char *front = strtok_r(file_name, " ", &save_ptr);
 
-
-  file = filesys_open (front);
+  while(true){
+    file = filesys_open (front);
+    if(file != NULL)
+      break;
+  }
 
 
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
-
+       printf ("load: %s: open failed\n", file_name);
+       thread_current()->load_success = false;
+       printf("tid is %d\n", thread_current()->tid);
 
       //printf("and my tid is %d and my parent is %d\n", thread_current()->tid, thread_current()->my_parent);
 

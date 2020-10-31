@@ -73,6 +73,7 @@ filesys_open (const char *name)
     dir_lookup (dir, name, &inode); // 여기 안에서 inode_open 호출해서 inode_open_cnt = 1로 초기화
   dir_close (dir);
 
+
   return file_open (inode);
 }
 

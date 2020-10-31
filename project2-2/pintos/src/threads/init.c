@@ -130,6 +130,7 @@ main (void)
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */
+
   run_actions (argv);
 
   /* Finish up. */
@@ -312,6 +313,7 @@ run_task (char **argv)
   
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
+
   process_wait (process_execute (task));
 #else
   run_test (task);

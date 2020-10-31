@@ -101,6 +101,7 @@ struct thread
     int8_t exit_status_of_child[50]; // overflow로 수정!
     bool load_success;
     int16_t my_parent;
+    int16_t abnormal_child; //abnormal하게 종료된 child의 tid
 #endif
 
     /* Owned by thread.c. */

@@ -11,6 +11,7 @@
 #include "userprog/process.h"
 
 extern struct list all_list;
+
 struct file
   {
     struct inode *inode;        /* File's inode. */
@@ -35,11 +36,10 @@ struct inode
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
   };
-
 //extern bool load_success;
 extern struct semaphore main_waiting_exec;
 extern struct semaphore exec_waiting_child_simple;
-extern struct semaphore multichild[50]; //multi-recurse.c, rox-multichild.c에서 사용
+extern struct semaphore multichild[46]; //multi-recurse.c, rox-multichild.c에서 사용
 
 
 static void syscall_handler (struct intr_frame *);
@@ -54,8 +54,64 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
 
+enum intr_level my_level = intr_disable();
 //printf("syscall number is %d and my tid is %d and my parent is %d\n", *(uint32_t *)(f->esp), thread_current()->tid, thread_current()->my_parent);
- 
+
+  struct list_elem *e = list_front(&all_list);
+  struct thread *parent;
+    for(; e != list_end(&all_list); e = list_next(e)){
+      parent = list_entry(e, struct thread, allelem);
+      if(parent->tid == thread_current()->my_parent){ // t는 부모 쓰레드
+          break;
+      }
+    }
+  if(parent->abnormal_child == thread_current()->tid){
+    //printf("I am an abnormal thread: %d\n", thread_current()->tid);
+    parent->exit_status_of_child[thread_current()->tid%44] = 0;
+    thread_exit();
+  }
+
+
+
+/* multi-oom에서 consume_some_resoucre로 파일 열어놓고 abnormal하게 terminate
+ 한 자식 프로세스들을 부모 프로세스가 syscall_handler 부를 때마다 그 파일 여느라 쓴 kernel resource들 free*/
+
+/*
+  if(thread_current()->abnormal_child != 0){ //원래 설정 안했을 때 초기값은 0
+// process_execute에서 abnormal child tid를 설정 해줬다면?
+
+
+    enum intr_level my_level = intr_disable();
+
+    struct list_elem *e = list_front(&all_list);
+    struct thread *abnormal;
+    for(; e != list_end(&all_list); e = list_next(e)){
+      abnormal = list_entry(e, struct thread, allelem);
+      if(abnormal->tid == thread_current()->abnormal_child){
+        break;
+      }
+    }
+
+    int k = 0;
+    for(;k < 10; k++){
+      if(abnormal->file_descriptor_table[k] != NULL){
+        struct file *wasted = abnormal->file_descriptor_table[k];
+        if(wasted->deny_write == true){
+          file_allow_write(wasted);
+          inode_close(wasted->inode);
+          free(wasted);
+        }
+      }
+    }
+
+    intr_set_level(my_level);
+  } 
+*/
+
+
+
+
+
   char *front;
   char *next;
   front = strtok_r(thread_current()->name, " ", &next);
@@ -69,7 +125,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if(*(uint32_t *)f->esp == 0){  //SYS_HALT
     shutdown_power_off();
   }
-
 
 
   else if(*(uint32_t *)f->esp == 1){ //SYS_EXIT void exit(int status)
@@ -87,13 +142,14 @@ syscall_handler (struct intr_frame *f UNUSED)
       sema_up(&main_waiting_exec);
     thread_exit();
   }
-  else{
 
+   
+  else{
 //printf("sys exit else and status is %d\n", *(uint32_t *)(f->esp+4));
 
       printf("%s: exit(%d)\n", front, *(uint32_t *)(f->esp+4));
 
-      int my_parent = 0;
+      int16_t my_parent = 0;
       my_parent = thread_current()->my_parent;
 
      //printf("my tid is %d and my parent is %d\n", thread_current()->tid, my_parent);
@@ -115,6 +171,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 // -> 이때는 sema_up을 하면 안됨. 예를 들어 부모가 tid=21이고, 자식이 tid=22, 23 인 경우 22는 multi-oom ~ -k 라는 명령어를 실행시키므로 부모인 tid=21이 sema_down을 안함
 // -> 이때 sema_up을 해버리면 자칫 21과 23 사이에 걸린 semaphore를 sema_up 해버릴 수 있음
 
+
+      int8_t index = 0;
+      struct file *wasted;
 
       if(my_parent == 1){
         sema_up(&main_waiting_exec);
@@ -171,7 +230,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
 
       else if(my_parent %44 == 19){
-          sema_up(&multichild[15]);
+        sema_up(&multichild[15]);
       }
 
       else if(my_parent %44 == 20){
@@ -206,17 +265,15 @@ syscall_handler (struct intr_frame *f UNUSED)
         sema_up(&multichild[24]);
       }
       else if(my_parent %44 == 29){
-//printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[25]);
       }
       else if(my_parent %44 == 30){
-//printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[26]);
       }
 
       else if(my_parent %44 == 31){ 
-         sema_up(&multichild[27]);
-     }
+        sema_up(&multichild[27]);
+      }
 
       else if(my_parent %44 == 32){
         sema_up(&multichild[28]);
@@ -229,7 +286,6 @@ syscall_handler (struct intr_frame *f UNUSED)
         sema_up(&multichild[30]);
       }
       else if(my_parent %44 == 35){
-//printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[31]);
       }
       else if(my_parent %44 == 36){
@@ -237,7 +293,6 @@ syscall_handler (struct intr_frame *f UNUSED)
         sema_up(&multichild[32]);
       }
       else if(my_parent %44 == 37){
-//printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[33]);
       }
       else if(my_parent %44 == 38){
@@ -245,7 +300,6 @@ syscall_handler (struct intr_frame *f UNUSED)
         sema_up(&multichild[34]);
       }
       else if(my_parent %44 == 39){
-//printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[35]);
       }
       else if(my_parent %44 == 40){
@@ -253,7 +307,6 @@ syscall_handler (struct intr_frame *f UNUSED)
         sema_up(&multichild[36]);
       }
       else if(my_parent %44 == 41){
-//printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[37]);
       }
       else if(my_parent %44 == 42){
@@ -261,7 +314,6 @@ syscall_handler (struct intr_frame *f UNUSED)
         sema_up(&multichild[38]);
       }
       else if(my_parent %44 == 43){
-//printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[39]);
 //printf("sema value is %d\n", (&multichild[39])->value);
       }
@@ -273,6 +325,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 //printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[41]);
       }
+/*
       else if(my_parent > 44 && my_parent%44 == 2){
 //printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[42]);
@@ -285,7 +338,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 //printf("sema_up and my tid is %d\n", thread_current()->tid);
         sema_up(&multichild[44]);
       }
-
+*/
 //printf("any way thread_exit is called\n");
       thread_exit();
     }
@@ -315,9 +368,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     
 
     //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 200, 1); 
-//    printf("exec depth(k) is %d\n", *(uint32_t *)(f->esp+28));
+//printf("exec depth(k) is %d\n", *(uint32_t *)(f->esp+28));
     if(*(uint32_t *)(f->esp+28) == 31){ //multi-oom에서 depth가 30 넘으면 child_pid = spawn_child(n+1, RECURSE)여기서 
-//printf("*****depth 31 reached and tid is %d\n", thread_current()->tid);
 
       f->eax = -1;
       struct thread *parent; // depth=30에 도달했으니 부모에게 나의 exit status를 기록해주고 종료
@@ -444,6 +496,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 
   else if(*(uint32_t *)f->esp == 6){ //SYS_OPEN
+  
+//printf("sys open and my tid is %d\n", thread_current()->tid);
 
     enum intr_level old_level = intr_enable();
     //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 200, 1);  
@@ -475,35 +529,30 @@ syscall_handler (struct intr_frame *f UNUSED)
       thread_exit();
     }
     else{
-   
-//printf("file name is %s\n", *((uint32_t *)(f->esp+4))); 
-//printf("front is %s\n", front);
-
-    //  else{
-
-//printf("***********************else in sys_open****************************\n");
-
-
 //////////// 수정해야함, 메모리 부족으로 struct thread 멤버중 file_descriptor_table을 50개로 줄였는데 이러면 sys_open 코드 수정해야함 그리고 tid가 400을 넘어갈 정도로 커질 수 있으니, file_descriptor_table을 129개의 배열로 하는 디자인은 바꿔야함///////////////
 
         struct file *file_ = filesys_open(*((uint32_t *)(f->esp+4)));
         struct thread *now = thread_current();
+        int return_val; // 내가 채우게 될 file_descriptor_table의 index(0에서 시작)
+
+        //if(file_ == NULL){
+        //  f->eax = -1;
+        //}
       
         if(memcmp(thread_current()->name, *(uint32_t *)(f->esp+4), strlen(front)) == 0){
          //실행중인 나 자신을 열겠다? --> 나중에 이 파일에 write하려면 file_deny_write여부 확인하고 True면 못쓰게 하기
-          file_deny_write(file_);
-        }
-
-        int return_val; // 내가 채우게 될 file_descriptor_table의 index(0에서 시작)
-        //printf("open : %s\n", *((uint32_t *)(f->esp+4)));
-        if(file_ == NULL){
-          f->eax = -1;
+         //printf("file name is %s\n", *(uint32_t *)(f->esp+4));
+         //printf("deny_write?  %d\n", file_->deny_write);
+         if(file_ != NULL)
+           file_deny_write(file_);
         }
 
         else{
           if((struct file *)file_->inode->open_cnt == 1){ //open-normal 처럼 한번만 여는경우
             //assert(now->file_descriptor_table[return_val] == NULL); //만약 이 thread가 이 파일을 처음 여는 경우이며, thread가 이때까지 다른 파일을 연적이 없을때
-            //
+
+//printf("open_cnt is 1 and my tid is %d\n", thread_current()->tid);            
+
             f->eax = thread_current()->tid; // return file descriptor 
             now->file_descriptor_table[return_val] = file_;
               //방금 file_descritor_table 배열에 채운 struct file pointer의 fd를 array_of_fd에 채움
@@ -512,13 +561,20 @@ syscall_handler (struct intr_frame *f UNUSED)
               
           }
           else{ // open-twice 처럼 같은 프로세스가 같은 파일을 2번 열려고 하는 경우
+
+            
             while(now->file_descriptor_table[return_val] != NULL){
               return_val = return_val + 1;
             }
-            now->array_of_fd[return_val] = now->tid + return_val;
-            now->file_descriptor_table[return_val] = file_;
-            f->eax = now->array_of_fd[return_val];
-            return_val = return_val + 1;
+            if(return_val == 10){
+              f->eax = -1;
+            }
+            else{
+              now->array_of_fd[return_val] = now->tid + return_val;
+              now->file_descriptor_table[return_val] = file_;
+              f->eax = now->array_of_fd[return_val];
+              return_val = return_val + 1;
+            }
           }
        }
 
@@ -532,7 +588,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   else if(*(uint32_t *)f->esp == 7){ // SYS_FILESIZE
     //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 300, 1);
-    int fd = 0;
+    int16_t fd = 0;
     while(thread_current()->array_of_fd[fd] != *(uint32_t *)(f->esp+4)){
       fd = fd + 1;
     }
@@ -558,7 +614,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       thread_exit();
     }
     else{
-      int fd = 0;
+      int16_t fd = 0;
       while(thread_current()->array_of_fd[fd] != *(uint32_t *)(f->esp+20)){
         fd = fd + 1;
     }
@@ -623,7 +679,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     else{
      
-      int index = 0;
+      int16_t index = 0;
       while(thread_current()->array_of_fd[index] != *(uint32_t *)(f->esp+20)){
         index = index + 1;
       }
@@ -647,7 +703,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if(*(uint32_t *)f->esp == 10){ // SYS_SEEK
     //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 300, 1);
     
-    int index = 0;
+    int16_t index = 0;
     while(thread_current()->array_of_fd[index] != *(uint32_t *)(f->esp+16)){
       index = index + 1;
     }
@@ -684,8 +740,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     struct thread *current = thread_current();
     //printf("fd is %d\n", *((uint32_t *)(f->esp+4)));
     ////printf("open counter is %d\n", current->file_descriptor_table[*((uint32_t *)(f->esp+4))]->inode->open_cnt);
-    int current_fd = *((uint32_t *)(f->esp+4));
-    int index_of_close_file = 0;
+    int16_t current_fd = *((uint32_t *)(f->esp+4));
+    int16_t index_of_close_file = 0;
 
 // fd를 모아놓은 array_of_fd에서 내가 close하려는 fd가 있는지 찾고 위치하는 index찾기
     while(current->array_of_fd[index_of_close_file] != current_fd){
@@ -725,40 +781,8 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
    
 
-/*
-      //if(current_fd == 129){
 
-       // printf("%s: exit(%d)\n", front, -1);
-/////parent struct의 멤버 exit_status_of_child에 나의 exit_status를 update해주고 exit해야함(multi-child-fd)//////////
-        static struct thread *parent;
-        struct list_elem *e = list_front(&all_list);
-        for(; e != list_end(&all_list); e = list_next(e)){
-          parent = list_entry(e, struct thread, allelem);
-          if(parent->tid == thread_current()->my_parent)
-            break;
-        }
-        parent->exit_status_of_child[(current->tid)%44] = -1;
-    
-        if(thread_current()->tid == 3){
-          sema_up(&main_waiting_exec);
-          thread_exit();
-        }
-        else if(thread_current()->tid > 3){
-          sema_up(&exec_waiting_child_simple);
-          thread_exit();
-        }
-    
-      }
-    }
-
-    //if(current_fd == 129){ // open한건 이미 다 close한 상황-> 닫을게 없는데 close system call을 했으니 error
-    //  printf("%s: exit(%d)\n", front, -1);
-    //  sema_up(&main_waiting_exec);
-    //  thread_exit();
-    //}
-*/
-
-
+intr_set_level(my_level);
 }
 
 

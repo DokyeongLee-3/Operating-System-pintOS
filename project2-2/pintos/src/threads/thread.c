@@ -482,8 +482,9 @@ init_thread (struct thread *t, const char *name, int priority)
   for(; i < 50; i++)
     t->exit_status_of_child[i] = -1;
 
-  t->load_success = true; 
+  t->abnormal_child = 0;
 
+  t->load_success = true;
 
   list_push_back (&all_list, &t->allelem);
 }
