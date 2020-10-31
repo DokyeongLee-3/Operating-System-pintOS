@@ -1145,7 +1145,14 @@ memcpy(my_copy, file_name, sizeof my_copy);
 char *save_ptr;
 char *front = strtok_r(file_name, " ", &save_ptr);
 
-  while(true){
+
+
+  // multi-oom같은 경우 filesys_open이 NULL을 줄때까지 시도하다보면
+  // memory 공간이 생길때 NULL이 아닌 struct file* 를 return
+  // 시도 횟수 제한을 둔 이유는 exec-missing같은건 진짜 없는 것을 실행하려 하기에
+  // 이때 일정 횟수 넘게 실패하면 진짜 없는 파일이라 간주하고 retrun NULL
+  int k = 0; 
+  for(; i< 100 ; i++){
     file = filesys_open (front);
     if(file != NULL)
       break;
@@ -1156,7 +1163,6 @@ char *front = strtok_r(file_name, " ", &save_ptr);
     {
        printf ("load: %s: open failed\n", file_name);
        thread_current()->load_success = false;
-       printf("tid is %d\n", thread_current()->tid);
 
       //printf("and my tid is %d and my parent is %d\n", thread_current()->tid, thread_current()->my_parent);
 

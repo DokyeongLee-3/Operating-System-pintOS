@@ -522,7 +522,6 @@ enum intr_level my_level = intr_disable();
 
 
     else if(pagedir_get_page( thread_current()->pagedir, *((uint32_t *)f->esp+1) ) == NULL){
-
       printf("%s: exit(%d)\n", front, -1);
       f->eax = -1;
       sema_up(&main_waiting_exec);
@@ -530,21 +529,22 @@ enum intr_level my_level = intr_disable();
     }
     else{
 //////////// 수정해야함, 메모리 부족으로 struct thread 멤버중 file_descriptor_table을 50개로 줄였는데 이러면 sys_open 코드 수정해야함 그리고 tid가 400을 넘어갈 정도로 커질 수 있으니, file_descriptor_table을 129개의 배열로 하는 디자인은 바꿔야함///////////////
-
         struct file *file_ = filesys_open(*((uint32_t *)(f->esp+4)));
         struct thread *now = thread_current();
         int return_val; // 내가 채우게 될 file_descriptor_table의 index(0에서 시작)
 
-        //if(file_ == NULL){
-        //  f->eax = -1;
-        //}
-      
-        if(memcmp(thread_current()->name, *(uint32_t *)(f->esp+4), strlen(front)) == 0){
+        if(file_ == NULL){
+          f->eax = -1;
+          //sema_up(&main_waiting_exec);
+        }
+         
+        else if(memcmp(thread_current()->name, *(uint32_t *)(f->esp+4), strlen(front)) == 0){
          //실행중인 나 자신을 열겠다? --> 나중에 이 파일에 write하려면 file_deny_write여부 확인하고 True면 못쓰게 하기
          //printf("file name is %s\n", *(uint32_t *)(f->esp+4));
          //printf("deny_write?  %d\n", file_->deny_write);
          if(file_ != NULL)
            file_deny_write(file_);
+         //printf("now deny_write?  %d\n", file_->deny_write);
         }
 
         else{
@@ -685,7 +685,7 @@ enum intr_level my_level = intr_disable();
       }
     
       if(thread_current()->file_descriptor_table[index]->deny_write == true){  //rox-simple.c -> 내가 rox-simple 파일을 실행하는 프로세스인데, rox-simple 실행하면서 열고 거기에 쓰면 그냥 return 0
-
+printf("not here?\n");
         f->eax = 0;
       }
       else{
