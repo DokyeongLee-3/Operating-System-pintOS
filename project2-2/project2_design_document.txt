@@ -30,7 +30,6 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
->> Answer: There is no struct modified or added.
 
 
 ---- ALGORITHMS ----
@@ -39,43 +38,18 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
->> Answer: For pushing arguments into stack, we first seperated
->> arguments and saved it in array in right order.
->> And we pushed arguments into the stack in the reverse
->> order of saving in array because it makes it easy to push
->> elements of argv in right order.
->> Then we added word-align and zeros and pushed elements of argv
->> which are addresses of above arguments.
->> We used the array we made for saving seperated arguments.
->> After that, we pushed the address of argv[0] and argc, and fake return address.
->>
->> Since size-fixed array was used for saving arguments, we
->> could avoid overflow by adjusting size of array. We
->> determined size of array considering size of command line
->> with limited size 128 bytes.
 
 
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
 
->> Answer: The functionality of two functions are same. The only
->> difference is that strtok_r() needs an extra argument
->> 'char **save_ptr' to store context. However, strtok() is an
->> wrapper function of strtok_r(), and it passes a static variable
->> for argument 'save_ptr'. So, it is unsafe to use strtok() at
->>multithreading system while strtok_r() is reentrant. 
 
 
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
->> Answer: The kernel becomes simplified because it doesn't 
->> include implemention of parsing part. And its simplification 
->> enhances the operation of kernel. Also, kernel becomes 
->> more safe because kernel no longer has to care about 
->> security related to command separation.
 
 
            SYSTEM CALLS
@@ -87,25 +61,30 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
->> Answer: There is one static variable declared in 'userprog/syscall.c'
->> static int return_val
->>   It is a "file descriptor(fd)" used for SYS_OPEN system call.
+We added some members in the struct thread
 
+int16_t array_of_fd[10] : array of file descriptor of files that a thread opened
+int8_t exit_status_of_child[50] : It indicates exit status of child. Especially, abnormally terminated children's status will be given to the parent.
+bool load_success : member indicating child's success of loading
+int16_t my_parent : It tells tid of its parent
+int16_t abnormal_child : Parents should know which child is terminated abnormally. It tells child tid which terminated abnormally  
 
 
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
 
->> Answer: We identified fd with thread id and we increased fd 
->> when a single file is opened again. So, file descriptors are 
->> unique within the entire OS. 
-
 
 ---- ALGORITHMS ----
 
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
+
+We used the file_read function for reading a file and file_write for writing at a file.
+
+For the reading, we first find file descriptor from the array_of_fd member and using the file descriptor, we find struct file pointer from the file_descriptor_table member. It will be used as an argument for the file_read function.
+
+For the writing, we use putbuf function when we need to write at the console. In other cases, we use struct file pointer in the member of file_descriptor_table for the argument of file_write function.
 
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
@@ -114,11 +93,12 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+???? inspection???
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
-??????????
-
+In the normal case, it just calls process_wait function which just returns a exit status of child. It also make the exit_status_of_child member one. If any thread which does not call exit system call, the exit_status_of_child will remain -1 which represents abnormal termination. Also, if we cannot find the waiting thread in the all_list, we find exit_status in our member exit_status_of_child assuming the child will put it in there.
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -134,12 +114,18 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
 
+I think this issue is related with write-bad-ptr.c test case. Especially some addresses below 0x8048000 is not valid pointer. In this case the thread is terminated and this way can be applied with other all system calls which inspect the validity of pointer.
+
+
 ---- SYNCHRONIZATION ----
 
 >> B7: The "exec" system call returns -1 if loading the new executable
 >> fails, so it cannot return before the new executable has completed
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
+
+We used the semephore synchronization. After creating a new thread at the process_execute function, a parent which is the caller of thread_create is blocked by sema_down. And the parent thread is unblock when the child fail to load or exit using exit system call.
+
 
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
@@ -148,16 +134,28 @@ Hyejin Kim <hyejinkim99@unist.ac.kr>
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+First, parents are always blocked after creating their child using the thread_create function.If the child exits normally, it will call wait system call and will unblock in the wait system call. And in the wait system call, children give parent their exit status by using struct thread member of parent. Therefore parent can get exit status of child even though the child exits before the parent's wait. In our implementation it cannot occur since parent will be block as soon as spawn a child. So parent cannot be terminated before the child's exit.
+
+
+
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
 
+We implemented in a way that we use the argument intr_frame *f paramter in the syscall_handler function. It indicates top of the stack and it is also starting point of user memory. Therefore we used f and decremented f whenever we want more deeper access to the user memory.
+
+
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+It is very simple and easy for a thread to find file descriptor since it provides file descriptor array and struct file pointer in its struct thread member. So every thread can find which file did they open by seeing those members. 
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+I used identity mapping as it is since it is simple and I could not find any advantage to use other hash functions.
 
          SURVEY QUESTIONS
          ================
