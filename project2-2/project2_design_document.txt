@@ -93,7 +93,12 @@ For the writing, we use putbuf function when we need to write at the console. In
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
-???? inspection???
+I think it is an issum about a fragmentation. If a full page is in one page,
+the number of inspection can be done once. But If it is fragmentated into 2 pages,
+It should be inspected two times. 
+Even though 2 bytes of data, I think, it can be divided into one byte each 
+in worst case, where it still requires two times of inspections.
+
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
