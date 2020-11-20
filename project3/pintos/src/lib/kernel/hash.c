@@ -135,7 +135,10 @@ hash_replace (struct hash *h, struct hash_elem *new)
 struct hash_elem *
 hash_find (struct hash *h, struct hash_elem *e) 
 {
+  // find_bucket은 elem의 주소에 hash_bytes 함수 적용한 거로
+  // bucket 찾아서 그 bucket내에서 for loop 돌면서 element 찾아냄
   return find_elem (h, find_bucket (h, e), e);
+
 }
 
 /* Finds, removes, and returns an element equal to E in hash

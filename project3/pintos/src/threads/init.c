@@ -170,7 +170,12 @@ paging_init (void)
 //printf("******************address of pagedir base is %p********************\n", pd);
   pt = NULL;
   //page directory, page table index 수(아마 항상 1024) 
+  //init_ram_pages = 16384
   num_of_pagedir_index = init_ram_pages;
+
+//printf("init_ram_pages : %d\n", init_ram_pages);
+//init_ram_pages = 1024??
+
   for (page = 0; page < init_ram_pages; page++)
     {
       uintptr_t paddr = page * PGSIZE;
@@ -178,6 +183,13 @@ paging_init (void)
       size_t pde_idx = pd_no (vaddr);
       size_t pte_idx = pt_no (vaddr);
       bool in_kernel_text = &_start <= vaddr && vaddr < &_end_kernel_text;
+
+
+/* &_end_kernel_text = 0xc0035000
+ * &_start = 0xc0020000 */
+
+//printf("_end_kernel_test %p \n", &_end_kernel_text);
+//printf("_start %p \n", &_start);
 
       if (pd[pde_idx] == 0)
         {

@@ -1563,9 +1563,6 @@ install_page (void *upage, void *kpage, bool writable)
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   ASSERT(kpage > &user_pool);
-  int frame_index = ((uint8_t *)kpage - (user_pool.base))/PGSIZE;
-  frame_table[frame_index] = upage;
-  which_process[frame_index] = thread_current()->tid;
  
   //printf("frame index is %d\n", frame_index);
   //printf("*************kpage is %p and user_pool.base is %p***************\n", (uint32_t *)kpage, user_pool.base);

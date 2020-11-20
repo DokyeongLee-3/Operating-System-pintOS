@@ -1,5 +1,7 @@
 #include "userprog/pagedir.h"
+#include "threads/thread.h"
 #include <stdbool.h>
+#include "threads/synch.h"
 #include <stddef.h>
 #include <string.h>
 #include "threads/init.h"
@@ -8,6 +10,17 @@
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
+extern uint32_t *frame_table;
+extern uint8_t *which_process;
+
+struct pool
+  {
+    struct lock lock;
+    struct bitmap *used_map;
+    uint8_t *base;
+  };
+
+extern struct pool kernel_pool, user_pool;
 
 /* Creates a new page directory that has mappings for kernel
    virtual addresses, but none for user virtual addresses.
@@ -119,7 +132,9 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
     {
       ASSERT ((*pte & PTE_P) == 0);
       *pte = pte_create_user (kpage, writable);
-//printf(">>>>>>>>>>>>pte point %p<<<<<<<<<<<<<<<<\n", *pte);
+      int frame_index = ((uint8_t *)kpage - (user_pool.base))/PGSIZE;
+      frame_table[frame_index] = upage;
+      which_process[frame_index] = thread_current()->tid;
       return true;
     }
   else

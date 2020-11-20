@@ -57,7 +57,7 @@ palloc_init (size_t user_page_limit)
   uint8_t *free_end = ptov (init_ram_pages * PGSIZE);
 
 //free_start is 0xc0100000
-//free_end is 0xc0400000
+//free_end is   0xc0400000
 
   size_t free_pages = (free_end - free_start) / PGSIZE;
 
@@ -66,12 +66,12 @@ palloc_init (size_t user_page_limit)
 
   size_t user_pages = free_pages / 2;
   size_t kernel_pages;
+
+
   if (user_pages > user_page_limit)
     user_pages = user_page_limit;  //user_page_limit은 SIZE_MAX(2^32)
   kernel_pages = free_pages - user_pages;
 
-//printf("number of user pages is %d\n", user_pages);
-//printf("number of kernel pages is %d\n", kernel_pages);
 
   num_of_user_pool_pages = user_pages;
   num_of_kernel_pool_pages = kernel_pages;
@@ -215,6 +215,7 @@ init_pool (struct pool *p, void *base, size_t page_cnt, const char *name)
 //page수만큼 bitmap을 만들고 
   p->used_map = bitmap_create_in_buf (page_cnt, base, bm_pages * PGSIZE); 
   p->base = base + bm_pages * PGSIZE;
+
 }
 
 /* Returns true if PAGE was allocated from POOL,
