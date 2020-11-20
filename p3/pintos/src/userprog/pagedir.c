@@ -5,6 +5,7 @@
 #include "threads/init.h"
 #include "threads/pte.h"
 #include "threads/palloc.h"
+#include "vm/frame.h"
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
@@ -112,6 +113,16 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
     {
       ASSERT ((*pte & PTE_P) == 0);
       *pte = pte_create_user (kpage, writable);
+      
+
+
+
+      /* add mapping info into frame table */
+      frame_table_add (kpage, pte);
+
+
+
+
       return true;
     }
   else
@@ -127,7 +138,7 @@ pagedir_get_page (uint32_t *pd, const void *uaddr)
 {
   uint32_t *pte;
 
-  ASSERT (is_user_vaddr (uaddr));
+  ASSERT ( (uaddr));
   
   pte = lookup_page (pd, uaddr, false);
   if (pte != NULL && (*pte & PTE_P) != 0)
@@ -151,6 +162,12 @@ pagedir_clear_page (uint32_t *pd, void *upage)
   pte = lookup_page (pd, upage, false);
   if (pte != NULL && (*pte & PTE_P) != 0)
     {
+
+
+      uint32_t *kpage = pte_get_page (*pte);
+      frame_table_delete (kpage);
+
+
       *pte &= ~PTE_P;
       invalidate_pagedir (pd);
     }
@@ -161,7 +178,7 @@ pagedir_clear_page (uint32_t *pd, void *upage)
    installed.
    Returns false if PD contains no PTE for VPAGE. */
 bool
-pagedir_is_dirty (uint32_t *pd, const void *vpage) 
+pagedir_is_dirty (uint32_t *pd, const void *vpage)
 {
   uint32_t *pte = lookup_page (pd, vpage, false);
   return pte != NULL && (*pte & PTE_D) != 0;

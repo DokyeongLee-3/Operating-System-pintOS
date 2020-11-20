@@ -132,9 +132,9 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
     {
       ASSERT ((*pte & PTE_P) == 0);
       *pte = pte_create_user (kpage, writable);
-      int frame_index = ((uint8_t *)kpage - (user_pool.base))/PGSIZE;
-      frame_table[frame_index] = upage;
-      which_process[frame_index] = thread_current()->tid;
+      //int frame_index = ((uint8_t *)kpage - (user_pool.base))/PGSIZE;
+      //frame_table[frame_index] = upage;
+      //which_process[frame_index] = thread_current()->tid;
       return true;
     }
   else
