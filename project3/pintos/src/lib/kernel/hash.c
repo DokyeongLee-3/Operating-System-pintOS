@@ -314,7 +314,7 @@ static struct list *
 find_bucket (struct hash *h, struct hash_elem *e) 
 {
   size_t bucket_idx = h->hash (e, h->aux) & (h->bucket_cnt - 1);
-  printf("bucket_idx is %d\n", bucket_idx);
+  //printf("bucket_idx is %d\n", bucket_idx);
   return &h->buckets[bucket_idx];
 }
 
@@ -330,13 +330,13 @@ find_elem (struct hash *h, struct list *bucket, struct hash_elem *e)
       struct hash_elem *hi = list_elem_to_hash_elem (i);
 ///////////////////////////////////
 struct page *my = hash_entry(hi, struct page, hash_elem); 
-printf("hi has user_vaddr : %p \n", my->user_vaddr);
+//printf("hi has user_vaddr : %p \n", my->user_vaddr);
 ///////////////////////////////////
       if (!h->less (hi, e, h->aux) && !h->less (e, hi, h->aux)){
         return hi; 
       }
     }
-printf("return NULL. There is no elem what we find\n");
+//printf("return NULL. There is no elem what we find\n");
   return NULL;
 }
 

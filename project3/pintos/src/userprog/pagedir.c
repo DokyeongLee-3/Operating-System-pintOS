@@ -118,6 +118,7 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
   ASSERT (is_user_vaddr (upage));
   ASSERT (vtop (kpage) >> PTSHIFT < init_ram_pages);
   ASSERT (pd != init_page_dir);
+
   /* upage가 가리키는 page table entry 얻어내서
    * 그 entry가 가리키는 곳을 kpage가 가리키는 곳
    * 즉 진짜 physical memory의 frame으로 매핑해줌 
@@ -135,6 +136,7 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
       int frame_index = ((uint8_t *)kpage - (user_pool.base))/PGSIZE;
       frame_table[frame_index] = upage;
       which_process[frame_index] = thread_current()->tid;
+
       return true;
     }
   else

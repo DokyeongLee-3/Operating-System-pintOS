@@ -6,6 +6,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/palloc.h"
+#include "threads/vaddr.h"
 #include "userprog/process.h"
 
 /* Number of page faults processed. */
@@ -190,11 +191,10 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
-
-  printf("\n");
+  //printf("$$$$$$$$$$$$$$$$$$$$ IN PAGE_FAULT $$$$$$$$$$$$$$$$$$$$$$\n");
   //hex_dump(fault_addr, fault_addr, 200,1);
-  printf("Cause of page fault %d?  %d?  %d?  \n", not_present, write, user);
-  printf("original fault address is %p\n", fault_addr);
+  //printf("Cause of page fault %d?  %d?  %d?  \n", not_present, write, user);
+  //printf("original fault address is %p\n", fault_addr);
   //printf("Read a byte at the user virtual address: %d\n", get_user(fault_addr));
   uint32_t faulting_addr = fault_addr;
   faulting_addr &= 0xfffff000;
@@ -213,72 +213,16 @@ page_fault (struct intr_frame *f)
   struct page *finding = page_lookup(addr_of_fault_addr); 
   ASSERT(faulting_addr == finding->user_vaddr);
 
-  /*
-  printf(">>>>>>>>address finding is %p<<<<<<<<<<<\n", finding);
-  printf(">>>>>>>>faulting address what we use is %p<<<<<<<<<<<\n", addr_of_fault_addr);
-  printf(">>>>>>>>finding user_vaddr is %p<<<<<<<<<<<\n", finding->user_vaddr);
-  printf(">>>>>>>>fiding size is %d<<<<<<<<<<<\n", finding->size);
-  printf("\n");
-  */
-printf("$$$$$$$$$$$$$$$$$$$$ IN PAGE_FAULT $$$$$$$$$$$$$$$$$$$$$$\n");
-  struct file* my_file = NULL;
-  uint32_t *backup_kpage = finding->kernel_vaddr;
- 
-  my_file->inode->elem.prev = *backup_kpage;
-  printf("In page fault, file->inode->elem.prev is %p\n", *backup_kpage);
-  backup_kpage+= sizeof(struct list_elem *);
-
-  my_file->inode->elem.next = *backup_kpage;
-  printf("In page fault, file->inode->elem.next is %p\n", *backup_kpage);
-  backup_kpage += sizeof(struct list_elem *);
-
-  my_file->inode->sector = *backup_kpage;
-  printf("file->inode->sector is %d\n", *backup_kpage);
-  backup_kpage += sizeof(block_sector_t);
-
-  my_file->inode->open_cnt = *backup_kpage;
-  printf("file->inode->open_cnt is %d\n", *backup_kpage);
-  backup_kpage += sizeof(int);
-
-  my_file->inode->removed = *backup_kpage;
-  printf("file->inode->removed is %d\n", *backup_kpage);
-  backup_kpage += sizeof(bool);
-
-  my_file->inode->deny_write_cnt = *backup_kpage;
-  printf("file->inode->deny_write_cnt is %d\n", *backup_kpage);
-  backup_kpage += sizeof(int);
-
-  my_file->inode->data.start = *backup_kpage;
-  printf("file->inode->data.start is %d\n", *backup_kpage);
-  backup_kpage += sizeof(block_sector_t);
-
-  my_file->inode->data.length = *backup_kpage;
-  printf("file->inode->data.length is %d\n", *backup_kpage);
-  backup_kpage += sizeof(off_t);
-
-  my_file->inode->data.magic = *backup_kpage;  
-  printf("file->inode->data.magic %d\n", *backup_kpage);
-  backup_kpage += sizeof(unsigned);
-
-  my_file->pos = *backup_kpage;
-  backup_kpage += sizeof(off_t);
-
-  my_file->deny_write = *backup_kpage;
-
     
-
 
   uint32_t *kpage = palloc_get_multiple(PAL_USER,1);
   int k = 0;
 
-  /* 예전의 load_segment 처럼 user_pool에서 얻은 page에 적어주기 */
-  struct file* backup_file = (finding->kernel_vaddr);
-  printf("$$$$$$$$$In page fault, file inode is %p$$$$$$$$$$\n", finding->file_.inode);
+  enum intr_level my_level = intr_disable();
 
-  if ((k = file_read (my_file, kpage, finding->size)) != (int)(finding->size)){
-    printf("k is %d and finding->size is %d\n", k, finding->size);
-    palloc_free_page (kpage);
-  }
+
+  memcpy(kpage, finding->kernel_vaddr, finding->read_size);
+  memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
   
   if (!install_page (addr_of_fault_addr, kpage, finding->writable)){
     palloc_free_page (kpage);
@@ -290,10 +234,8 @@ printf("$$$$$$$$$$$$$$$$$$$$ IN PAGE_FAULT $$$$$$$$$$$$$$$$$$$$$$\n");
 
   free(finding);
 
-  if(thread_current()->tid == 3)
-    sema_up(&main_waiting_exec);
-  else if(thread_current()->tid == 4)
-    sema_up(&exec_waiting_child_simple);
+  intr_set_level(my_level); 
+ 
 
   /* 
   printf("%s: exit(%d)\n",thread_current()->name, -1);

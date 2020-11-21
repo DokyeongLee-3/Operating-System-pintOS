@@ -214,7 +214,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_length (inode) - offset;
-printf("inode_lenfth(inode): %d\n", inode_length (inode));
+//printf("inode_lenfth(inode): %d\n", inode_length (inode));
 //printf("offset is %d\n", offset);
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
       int min_left = inode_left < sector_left ? inode_left : sector_left;
