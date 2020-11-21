@@ -54,7 +54,7 @@ syscall_init (void) //intr_handlers 배열에 0x30(interrupt)에 해당하는 ha
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-
+//printf("syscall number is %d and tid is %d\n", *(uint32_t *)f->esp, thread_current()->tid);
 enum intr_level my_level = intr_disable();
 
   struct list_elem *e = list_front(&all_list);

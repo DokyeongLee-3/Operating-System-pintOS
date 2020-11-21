@@ -1187,7 +1187,6 @@ char *front = strtok_r(file_name, " ", &save_ptr);
   // memory 공간이 생길때 NULL이 아닌 struct file* 를 return
   // 시도 횟수 제한을 둔 이유는 exec-missing같은건 진짜 없는 것을 실행하려 하기에
   // 이때 일정 횟수 넘게 실패하면 진짜 없는 파일이라 간주하고 retrun NULL
-  int k = 0; 
   for(; i< 100 ; i++){
     file = filesys_open (front);
     if(file != NULL)

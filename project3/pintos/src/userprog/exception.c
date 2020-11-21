@@ -174,7 +174,7 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
 
-//printf("page fault.....\n");
+//printf("page fault.....and tid is %d and esp is %p\n",thread_current()->tid, f->esp);
 
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
@@ -182,13 +182,37 @@ page_fault (struct intr_frame *f)
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
 
-  if(fault_addr == NULL || fault_addr == (int *)0xC0000000){ // bad_read case
+
+  uint32_t faulting_addr = fault_addr;
+  faulting_addr &= 0xfffff000;
+  uint32_t *addr_of_fault_addr = faulting_addr;
+  
+  struct page *finding = page_lookup(addr_of_fault_addr);
+
+
+  if(fault_addr == NULL || fault_addr == (int *)0xC0000000){ // for all bad-* tests 
     if(thread_current()->tid == 3){
       sema_up(&main_waiting_exec);
       printf("%s: exit(%d)\n", thread_current()->name, -1);
       thread_exit ();
     }
   }
+
+  /* 보통 stack limit은 64MB까지라 했으니 esp가 PHYS_BASE-64MB 밑으로
+   * 내려가면 invalid esp로 간주하자? */ 
+  if(f->esp < 0xbc000000){  // wait-killed, sc-bad-sp
+    if(thread_current()->my_parent == 1){
+      sema_up(&main_waiting_exec);
+      printf("%s: exit(%d)\n", thread_current()->name, -1);
+      thread_exit ();
+    }
+    if(thread_current()->my_parent == 3){
+       printf("%s: exit(%d)\n", thread_current()->name, -1);
+       sema_up(&exec_waiting_child_simple);
+       thread_exit ();
+    }  
+  }
+  
 
   intr_enable ();
 
@@ -200,29 +224,12 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  uint32_t faulting_addr = fault_addr;
-  faulting_addr &= 0xfffff000;
-  uint32_t *addr_of_fault_addr = faulting_addr;
-  //printf("fault address is %p\n", faulting_addr);
-
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
-  //printf("$$$$$$$$$$$$$$$$$$$$ IN PAGE_FAULT $$$$$$$$$$$$$$$$$$$$$$\n");
-  //hex_dump(fault_addr, fault_addr, 200,1);
-  //printf("Cause of page fault %d?  %d?  %d?  \n", not_present, write, user);
-  //printf("Read a byte at the user virtual address: %d\n", get_user(fault_addr));
-  //printf("sp is %p\n", f->esp);
-  if(f->esp < 0x8084000){ // sc-bad-sp case
-    if(thread_current()->tid == 3){
-      sema_up(&main_waiting_exec);
-      printf("%s: exit(%d)\n", thread_current()->name, -1);
-      thread_exit ();
-    }
-  }
-
+  /* load_segment에서 insert해둔 hash_elem을 찾는다 */
   
   /* 여기서 이제 faulting address(user space에 존재)가 주어졌고, hash table에서
    * faluting address를 찾아서 그 faulting address를 포함하고 있는 struct page를
@@ -231,9 +238,6 @@ page_fault (struct intr_frame *f)
    * user pool page하나 할당받아서 거기에 file_read로 써주고(load_segment 처럼),
    * install_page로 mapping 해준다. 마지막으로 데이터를 써놨던 kernel_pool에서 가져온
    * kpage는 여기서 palloc_free_multiple로 free해준다*/
-
-  /* load_segment에서 insert해둔 hash_elem을 찾는다 */
-  struct page *finding = page_lookup(addr_of_fault_addr); 
 
  
   ASSERT(faulting_addr == finding->user_vaddr);
