@@ -8,6 +8,7 @@
 #include "hash.h"
 #include "../debug.h"
 #include "threads/malloc.h"
+#include "vm/page.h"
 
 #define list_elem_to_hash_elem(LIST_ELEM)                       \
         list_entry(LIST_ELEM, struct hash_elem, list_elem)
@@ -98,11 +99,14 @@ hash_destroy (struct hash *h, hash_action_func *destructor)
 struct hash_elem *
 hash_insert (struct hash *h, struct hash_elem *new)
 {
+
   struct list *bucket = find_bucket (h, new);
   struct hash_elem *old = find_elem (h, bucket, new);
 
-  if (old == NULL) 
+
+  if (old == NULL) {
     insert_elem (h, bucket, new);
+  }
 
   rehash (h);
 
@@ -269,6 +273,7 @@ hash_bytes (const void *buf_, size_t size)
   const unsigned char *buf = buf_;
   unsigned hash;
 
+
   ASSERT (buf != NULL);
 
   hash = FNV_32_BASIS;
@@ -306,6 +311,7 @@ static struct list *
 find_bucket (struct hash *h, struct hash_elem *e) 
 {
   size_t bucket_idx = h->hash (e, h->aux) & (h->bucket_cnt - 1);
+  printf("bucket_idx is %d\n", bucket_idx);
   return &h->buckets[bucket_idx];
 }
 
@@ -319,9 +325,15 @@ find_elem (struct hash *h, struct list *bucket, struct hash_elem *e)
   for (i = list_begin (bucket); i != list_end (bucket); i = list_next (i)) 
     {
       struct hash_elem *hi = list_elem_to_hash_elem (i);
-      if (!h->less (hi, e, h->aux) && !h->less (e, hi, h->aux))
+///////////////////////////////////
+struct page *my = hash_entry(hi, struct page, hash_elem); 
+printf("hi has user_vaddr : %p \n", my->user_vaddr);
+///////////////////////////////////
+      if (!h->less (hi, e, h->aux) && !h->less (e, hi, h->aux)){
         return hi; 
+      }
     }
+printf("return NULL. There is no elem what we find\n");
   return NULL;
 }
 
@@ -384,6 +396,7 @@ rehash (struct hash *h)
          there's no reason for it to be an error. */
       return;
     }
+
   for (i = 0; i < new_bucket_cnt; i++) 
     list_init (&new_buckets[i]);
 

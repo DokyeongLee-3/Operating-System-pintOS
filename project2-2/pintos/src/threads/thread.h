@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "lib/kernel/hash.h"
+#include "vm/page.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -103,6 +105,7 @@ struct thread
     int16_t my_parent;
     int16_t abnormal_child; //abnormal하게 종료된 child의 tid
 #endif
+    struct hash pages; //supplemental page table entry
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

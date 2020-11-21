@@ -10,6 +10,7 @@
 #include "threads/loader.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/interrupt.h"
 
 /* Page allocator.  Hands out memory in page-size (or
    page-multiple) chunks.  See malloc.h for an allocator that
@@ -23,7 +24,8 @@
 
    By default, half of system RAM is given to the kernel pool and
    half to the user pool.  That should be huge overkill for the
-   kernel pool, but that's just fine for demonstration purposes. */
+   kernel pool, but that's just fine fo nemonstration purposes. */
+
 
 /* A memory pool. */
 struct pool
@@ -33,8 +35,13 @@ struct pool
     uint8_t *base;                      /* Base of pool. */
   };
 
+extern uint32_t *frame_table;
+
+uint16_t num_of_user_pool_pages;
+uint16_t num_of_kernel_pool_pages;
+
 /* Two pools: one for kernel data, one for user pages. */
-static struct pool kernel_pool, user_pool;
+struct pool kernel_pool, user_pool;
 
 static void init_pool (struct pool *, void *base, size_t page_cnt,
                        const char *name);
@@ -48,17 +55,38 @@ palloc_init (size_t user_page_limit)
   /* Free memory starts at 1 MB and runs to the end of RAM. */
   uint8_t *free_start = ptov (1024 * 1024);
   uint8_t *free_end = ptov (init_ram_pages * PGSIZE);
+
+//free_start is 0xc0100000
+//free_end is 0xc0400000
+
   size_t free_pages = (free_end - free_start) / PGSIZE;
+
+
+////user page수, kernel page수는 384개////
+
   size_t user_pages = free_pages / 2;
   size_t kernel_pages;
   if (user_pages > user_page_limit)
-    user_pages = user_page_limit;
+    user_pages = user_page_limit;  //user_page_limit은 SIZE_MAX(2^32)
   kernel_pages = free_pages - user_pages;
 
+//printf("number of user pages is %d\n", user_pages);
+//printf("number of kernel pages is %d\n", kernel_pages);
+
+  num_of_user_pool_pages = user_pages;
+  num_of_kernel_pool_pages = kernel_pages;
+
   /* Give half of memory to kernel, half to user. */
+  /* kernel pool은 0xc0101000 ~ 0xc0280999까지 */
+  /* user pool은 0xc0281000 ~  위로 */
   init_pool (&kernel_pool, free_start, kernel_pages, "kernel pool");
   init_pool (&user_pool, free_start + kernel_pages * PGSIZE,
              user_pages, "user pool");
+
+  frame_table_init(user_pages);
+
+//kernel pool base is 0xc0101000
+//user pool base is 0xc0281000
 }
 
 /* Obtains and returns a group of PAGE_CNT contiguous free pages.
@@ -70,6 +98,8 @@ palloc_init (size_t user_page_limit)
 void *
 palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
 {
+  enum intr_level my_level = intr_disable();
+  
   struct pool *pool = flags & PAL_USER ? &user_pool : &kernel_pool;
   void *pages;
   size_t page_idx;
@@ -78,9 +108,13 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
     return NULL;
 
   lock_acquire (&pool->lock);
+  // page_cnt만큼 연속적으로 사용가능한 frame이 있다면 그 시작 index를 리턴
   page_idx = bitmap_scan_and_flip (pool->used_map, 0, page_cnt, false);
+
   lock_release (&pool->lock);
 
+
+  // 주소도 시작 주소 리턴
   if (page_idx != BITMAP_ERROR)
     pages = pool->base + PGSIZE * page_idx;
   else
@@ -96,6 +130,8 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
       if (flags & PAL_ASSERT)
         PANIC ("palloc_get: out of pages");
     }
+  
+  intr_set_level(my_level);
 
   return pages;
 }
@@ -139,6 +175,12 @@ palloc_free_multiple (void *pages, size_t page_cnt)
 
   ASSERT (bitmap_all (pool->used_map, page_idx, page_cnt));
   bitmap_set_multiple (pool->used_map, page_idx, page_cnt, false);
+
+  int k = page_idx;
+  for(; k < page_idx + page_cnt; k = k+1){
+    frame_table[k] = 0; // user virtual address가 아니라 그냥 0 적혀있으면 사용중이 아니란 의미
+  }
+
 }
 
 /* Frees the page at PAGE. */
@@ -156,6 +198,11 @@ init_pool (struct pool *p, void *base, size_t page_cnt, const char *name)
   /* We'll put the pool's used_map at its base.
      Calculate the space needed for the bitmap
      and subtract it from the pool's size. */
+// bitmap_buf_size(size_t bit_cnt){ return sizeof(struct bitmap) + byte_cnt(bit_cnt); }
+// byte_cnt는 bit_cnt를 8로 나눈 값을 리턴 
+// 결국 위의 palloc_init에서 kernel_pool, user_pool을 init_pool로 초기화하는건
+// bm_pages가 1(= ((8 + (384/8) ) / 2^12)) 이 되면서 bitmap을 위해 1개의 page할당
+// b->bits[0]부터 b->bits[383]까지 frame의 할당 정보 확인 가능
   size_t bm_pages = DIV_ROUND_UP (bitmap_buf_size (page_cnt), PGSIZE);
   if (bm_pages > page_cnt)
     PANIC ("Not enough memory in %s for bitmap.", name);
@@ -165,7 +212,8 @@ init_pool (struct pool *p, void *base, size_t page_cnt, const char *name)
 
   /* Initialize the pool. */
   lock_init (&p->lock);
-  p->used_map = bitmap_create_in_buf (page_cnt, base, bm_pages * PGSIZE);
+//page수만큼 bitmap을 만들고 
+  p->used_map = bitmap_create_in_buf (page_cnt, base, bm_pages * PGSIZE); 
   p->base = base + bm_pages * PGSIZE;
 }
 

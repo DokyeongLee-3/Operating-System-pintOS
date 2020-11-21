@@ -1,3 +1,5 @@
+#include "vm/frame.h"
+#include "vm/page.h"
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -20,6 +22,9 @@
 #include "threads/synch.h"
 
 extern struct list all_list;
+extern struct pool kernel_pool, user_pool;
+extern uint32_t *frame_table;
+extern uint8_t *which_process;
 
 struct semaphore main_waiting_exec;
 struct semaphore exec_waiting_child_simple;
@@ -27,6 +32,36 @@ struct semaphore multichild[45];
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+struct pool
+  {
+    struct lock lock;
+    struct bitmap *used_map;
+    uint8_t *base;
+  };
+
+struct inode_disk
+  {
+    block_sector_t start;               /* First data sector. */
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+    uint32_t unused[125];               /* Not used. */
+  };
+
+struct inode
+  {
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    struct inode_disk data;             /* Inode content. */
+  };
+
+
+
+extern struct pool kernel_pool, user_pool;
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -335,7 +370,6 @@ process_execute (const char *file_name)
         crash = true;
     }
     if(crash == false){
-      //printf("sema_down, my tid is %d\n", thread_current()->tid);
       sema_down(&multichild[19]);
     }
     else{
@@ -765,8 +799,6 @@ start_process (void *file_name_)
     success = load (file_name, &if_.eip, &if_.esp);
 //hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
-
-
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) { 
@@ -1124,6 +1156,9 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+  hash_init(&(thread_current()->pages), page_hash, page_less, NULL);
+
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -1145,8 +1180,6 @@ memcpy(my_copy, file_name, sizeof my_copy);
 char *save_ptr;
 char *front = strtok_r(file_name, " ", &save_ptr);
 
-
-
   // multi-oom같은 경우 filesys_open이 NULL을 줄때까지 시도하다보면
   // memory 공간이 생길때 NULL이 아닌 struct file* 를 return
   // 시도 횟수 제한을 둔 이유는 exec-missing같은건 진짜 없는 것을 실행하려 하기에
@@ -1163,9 +1196,6 @@ char *front = strtok_r(file_name, " ", &save_ptr);
     {
        printf ("load: %s: open failed\n", file_name);
        thread_current()->load_success = false;
-
-      //printf("and my tid is %d and my parent is %d\n", thread_current()->tid, thread_current()->my_parent);
-
 
       goto done; 
     }
@@ -1211,9 +1241,16 @@ char *front = strtok_r(file_name, " ", &save_ptr);
         case PT_LOAD:
           if (validate_segment (&phdr, file)) 
             {
+//PGMASK = 0x00000fff
+//struct *file은 file_open으로 열때 calloc으로 kernel_pool의 메모리를
+//할당해주므로 커널 영역의 vm을 가지고 있음
               bool writable = (phdr.p_flags & PF_W) != 0;
               uint32_t file_page = phdr.p_offset & ~PGMASK;
+//printf("address of file is %p\n", file);
+//printf("offset of segment %d\n", phdr.p_offset);
+//printf("virtual address of segment %p\n", phdr.p_vaddr);
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
+//printf("mem_page is %x\n", mem_page);
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
               if (phdr.p_filesz > 0)
@@ -1221,6 +1258,8 @@ char *front = strtok_r(file_name, " ", &save_ptr);
                   /* Normal segment.
                      Read initial part from disk and zero the rest. */
                   read_bytes = page_offset + phdr.p_filesz;
+                  /* ROUND_UP은 2번째 인자의 배수에 가까운 수로 만들어줌
+                   * 예를 들어 ROUND_up(19,5)는 20 */ 
                   zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
                                 - read_bytes);
                 }
@@ -1258,7 +1297,7 @@ char *front = strtok_r(file_name, " ", &save_ptr);
 }
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
+bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -1323,11 +1362,22 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
+printf("@@@@@@@@@@@@@@@ load segment start @@@@@@@@@@@@@@@@\n");
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
+  uint8_t required_pages = DIV_ROUND_UP(read_bytes,PGSIZE);
+
+/* kernel pool에서 필요한 만큼페이지 할당해서 여기 파일의 segment 전부를 적어둔다 */
+printf("!!!!!argument ofs is %d\n", ofs);
   file_seek (file, ofs);
+printf("!!!!!In load segment, file offset is %d\n", file->pos);
+printf("Even though in load_segment, indoe_length is : %d\n", inode_length(file->inode));
+  /* 매뉴얼에서 이 while loop 고치라고 함 (4.3.2 Paging)*/
+
+
+  int cnt = 0;
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -1336,30 +1386,74 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
+      struct page *spt_entry = malloc(sizeof(struct page));
+printf("****************this time read bytes: %d / zero_bytes: %d *******************\n", read_bytes, zero_bytes);   
+      uint32_t *backup_kpage = palloc_get_page(PAL_ZERO);
+   
+      int k = 0;      
+ 
+//printf("********address of spt is %p********\n", spt_entry);
+//printf(">>>>>>>>>In load segment, backup_kpage is %d<<<<<<<<<\n",backup_kpage);
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      spt_entry->kernel_vaddr = backup_kpage;
+//printf(">>>>>>>>>In load segment, backup_kpage is %p <<<<<<<<<<\n", backup_kpage);
+      /////////////////  struct file 복사 ////////////////////
+ 
+      *backup_kpage = file->inode->elem.prev;
+printf("file->inode->elem.prev is %p\n", file->inode->elem.prev);
+      backup_kpage += sizeof(struct list_elem *);
+      *backup_kpage = file->inode->elem.next;
+printf("file->inode->elem.next is %p\n", file->inode->elem.next);
+      backup_kpage += sizeof(struct list_elem *);
+      *backup_kpage = file->inode->sector;
+printf("file->inode->sector is %d\n", file->inode->sector);
+      backup_kpage += sizeof(block_sector_t);
+      *backup_kpage = file->inode->open_cnt;
+printf("file->inode->open_cnt is %d\n", file->inode->open_cnt);
+      backup_kpage += sizeof(int);
+      *backup_kpage = file->inode->removed;
+printf("file->inode->removed is %d\n", file->inode->removed);
+      backup_kpage += sizeof(bool);
+      *backup_kpage = file->inode->deny_write_cnt;
+printf("file->inode->deny_write_cnt is %d\n", file->inode->deny_write_cnt);
+      backup_kpage += sizeof(int);
+      *backup_kpage = file->inode->data.start;
+printf("file->inode->data.start is %d\n", file->inode->data.start);
+      backup_kpage += sizeof(block_sector_t);
+      *backup_kpage = file->inode->data.length;
+printf("file->inode->data.length is %d\n", file->inode->data.length);
+      backup_kpage += sizeof(off_t);
+      *backup_kpage = file->inode->data.magic;
+printf("file->inode->data.magic is %d\n", file->inode->data.magic);
+      backup_kpage += sizeof(unsigned);
+      *backup_kpage = file->pos;
+printf("file->pos is %d\n", file->pos);
+      backup_kpage += sizeof(off_t);
+      *backup_kpage = file->deny_write;
+printf("file->deny_write is %d\n", file->deny_write);
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
+      ///////////////////////////////////////////////////////
+      spt_entry->user_vaddr = upage;
+      spt_entry->writable = writable;
+      spt_entry->size = page_read_bytes;
+      memcpy(&(spt_entry->file_), file, sizeof(struct file));
+
+//printf("$$$$$$$$$In load_segment, size is %p$$$$$$$$$$\n", spt_entry->size);
+//printf("$$$$$$$$$In load_segment, file inode is %p$$$$$$$$$$\n", file->inode);
+
+      hash_insert(&(thread_current()->pages), &(spt_entry->hash_elem));
+
+
+//printf(">>>>>>>>>In load segment, upage is %p <<<<<<<<<<\n", upage);
+//printf(">>>>>>>>>In load segment, size is %p <<<<<<<<<<\n", page_read_bytes);
+printf("\n");
+printf("\n");
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
+      cnt += 1;
     }
   return true;
 }
@@ -1440,8 +1534,8 @@ setup_stack (void **esp, char *my_copy)
     }
     
   }
-//hex_dump(*esp, *esp, 300, 1);
   ///////////////////////////////////////////////
+  //hex_dump(*esp-0x79b3e000, *esp, 0x79f8aadd, 1);
   return success;
 }
 
@@ -1454,13 +1548,28 @@ setup_stack (void **esp, char *my_copy)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+
+/* manual보면 핀토스는 kernel memory를 physical memory에 directly mapping
+ * 함으로서 첫번째 kernel virtual page가 첫번째 physical memory frame으로
+ * 매핑된다고 한다 --> 이 말은 frame에 kernel virtual address로 접근할 수
+ * 있다는 의미이다 --> 결국 아래 install_page함수는 겉보기엔 user virtual 
+ * memory를 kernel virtual page로 매핑해주는 것 같지만 결과적으로는 user
+ * virtual memory를 physical memory frame으로 매핑해주는 것이다 */
+bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
+  ASSERT(kpage > &user_pool);
+  int frame_index = ((uint8_t *)kpage - (user_pool.base))/PGSIZE;
+  frame_table[frame_index] = upage;
+  which_process[frame_index] = thread_current()->tid;
+ 
+  //printf("frame index is %d\n", frame_index);
+  //printf("*************kpage is %p and user_pool.base is %p***************\n", (uint32_t *)kpage, user_pool.base);
+  
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }

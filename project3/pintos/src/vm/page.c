@@ -19,7 +19,7 @@ unsigned my_divisor(const void *buf_, size_t, size){
 
 unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED){
   const struct page *p = hash_entry(p_, struct page, hash_elem);
-  printf("######## argument is %p ###########\n", p->user_vaddr);
+  //printf("######## argument is %p ###########\n", p->user_vaddr);
   return hash_bytes(&p->user_vaddr, sizeof p->user_vaddr);
 }
 
@@ -36,7 +36,9 @@ struct page *page_lookup(const void *address){
 
   p.user_vaddr = address;
 
+
   e = hash_find(&(thread_current()->pages), &p.hash_elem);
+
  
   return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }

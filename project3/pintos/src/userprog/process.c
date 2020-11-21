@@ -1362,7 +1362,7 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
-printf("@@@@@@@@@@@@@@@ load segment start @@@@@@@@@@@@@@@@\n");
+//printf("@@@@@@@@@@@@@@@ load segment start @@@@@@@@@@@@@@@@\n");
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
@@ -1370,10 +1370,10 @@ printf("@@@@@@@@@@@@@@@ load segment start @@@@@@@@@@@@@@@@\n");
   uint8_t required_pages = DIV_ROUND_UP(read_bytes,PGSIZE);
 
 /* kernel pool에서 필요한 만큼페이지 할당해서 여기 파일의 segment 전부를 적어둔다 */
-printf("!!!!!argument ofs is %d\n", ofs);
+//printf("!!!!!argument ofs is %d\n", ofs);
   file_seek (file, ofs);
-printf("!!!!!In load segment, file offset is %d\n", file->pos);
-printf("Even though in load_segment, indoe_length is : %d\n", inode_length(file->inode));
+//printf("!!!!!In load segment, file offset is %d\n", file->pos);
+//printf("Even though in load_segment, indoe_length is : %d\n", inode_length(file->inode));
   /* 매뉴얼에서 이 while loop 고치라고 함 (4.3.2 Paging)*/
 
 
@@ -1387,9 +1387,11 @@ printf("Even though in load_segment, indoe_length is : %d\n", inode_length(file-
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       struct page *spt_entry = malloc(sizeof(struct page));
-printf("****************this time read bytes: %d / zero_bytes: %d *******************\n", read_bytes, zero_bytes);   
+//printf("****************this time read bytes: %d / zero_bytes: %d *******************\n", read_bytes, zero_bytes);   
+      // kernel_pool에서 frame 할당 받아서 여기에 file 읽어두고
+      // 나중에 page fault뜨면 여기서 file 읽어와서 user frame에 load해주자
       uint32_t *backup_kpage = palloc_get_page(PAL_ZERO);
-   
+
       int k = 0;      
  
 //printf("********address of spt is %p********\n", spt_entry);
@@ -1397,46 +1399,17 @@ printf("****************this time read bytes: %d / zero_bytes: %d **************
 
       spt_entry->kernel_vaddr = backup_kpage;
 //printf(">>>>>>>>>In load segment, backup_kpage is %p <<<<<<<<<<\n", backup_kpage);
-      /////////////////  struct file 복사 ////////////////////
  
-      *backup_kpage = file->inode->elem.prev;
-printf("file->inode->elem.prev is %p\n", file->inode->elem.prev);
-      backup_kpage += sizeof(struct list_elem *);
-      *backup_kpage = file->inode->elem.next;
-printf("file->inode->elem.next is %p\n", file->inode->elem.next);
-      backup_kpage += sizeof(struct list_elem *);
-      *backup_kpage = file->inode->sector;
-printf("file->inode->sector is %d\n", file->inode->sector);
-      backup_kpage += sizeof(block_sector_t);
-      *backup_kpage = file->inode->open_cnt;
-printf("file->inode->open_cnt is %d\n", file->inode->open_cnt);
-      backup_kpage += sizeof(int);
-      *backup_kpage = file->inode->removed;
-printf("file->inode->removed is %d\n", file->inode->removed);
-      backup_kpage += sizeof(bool);
-      *backup_kpage = file->inode->deny_write_cnt;
-printf("file->inode->deny_write_cnt is %d\n", file->inode->deny_write_cnt);
-      backup_kpage += sizeof(int);
-      *backup_kpage = file->inode->data.start;
-printf("file->inode->data.start is %d\n", file->inode->data.start);
-      backup_kpage += sizeof(block_sector_t);
-      *backup_kpage = file->inode->data.length;
-printf("file->inode->data.length is %d\n", file->inode->data.length);
-      backup_kpage += sizeof(off_t);
-      *backup_kpage = file->inode->data.magic;
-printf("file->inode->data.magic is %d\n", file->inode->data.magic);
-      backup_kpage += sizeof(unsigned);
-      *backup_kpage = file->pos;
-printf("file->pos is %d\n", file->pos);
-      backup_kpage += sizeof(off_t);
-      *backup_kpage = file->deny_write;
-printf("file->deny_write is %d\n", file->deny_write);
-
-      ///////////////////////////////////////////////////////
       spt_entry->user_vaddr = upage;
+      spt_entry->read_size = page_read_bytes;
       spt_entry->writable = writable;
-      spt_entry->size = page_read_bytes;
-      memcpy(&(spt_entry->file_), file, sizeof(struct file));
+
+      if (file_read (file, backup_kpage, page_read_bytes) != (int) page_read_bytes)
+        {
+          palloc_free_page (backup_kpage);
+          return false;
+        }
+      memset (backup_kpage + page_read_bytes, 0, page_zero_bytes);
 
 //printf("$$$$$$$$$In load_segment, size is %p$$$$$$$$$$\n", spt_entry->size);
 //printf("$$$$$$$$$In load_segment, file inode is %p$$$$$$$$$$\n", file->inode);
@@ -1446,8 +1419,6 @@ printf("file->deny_write is %d\n", file->deny_write);
 
 //printf(">>>>>>>>>In load segment, upage is %p <<<<<<<<<<\n", upage);
 //printf(">>>>>>>>>In load segment, size is %p <<<<<<<<<<\n", page_read_bytes);
-printf("\n");
-printf("\n");
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -1564,9 +1535,6 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   ASSERT(kpage > &user_pool);
  
-  //printf("frame index is %d\n", frame_index);
-  //printf("*************kpage is %p and user_pool.base is %p***************\n", (uint32_t *)kpage, user_pool.base);
-  
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
