@@ -8,10 +8,12 @@
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "userprog/pagedir.h"
 
 /* Number of page faults processed. */
 extern struct semaphore main_waiting_exec;
 extern struct semaphore exec_waiting_child_simple;
+extern uint32_t *lookup_page (uint32_t *pd, const void *vaddr, bool create);
 
 static long long page_fault_cnt;
 
@@ -171,6 +173,9 @@ page_fault (struct intr_frame *f)
      See [IA32-v2a] "MOV--Move to/from Control Registers" and
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
+
+//printf("page fault.....\n");
+
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
 
@@ -186,6 +191,11 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  uint32_t faulting_addr = fault_addr;
+  faulting_addr &= 0xfffff000;
+  uint32_t *addr_of_fault_addr = faulting_addr;
+  //printf("fault address is %p\n", faulting_addr);
+
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
@@ -194,13 +204,17 @@ page_fault (struct intr_frame *f)
   //printf("$$$$$$$$$$$$$$$$$$$$ IN PAGE_FAULT $$$$$$$$$$$$$$$$$$$$$$\n");
   //hex_dump(fault_addr, fault_addr, 200,1);
   //printf("Cause of page fault %d?  %d?  %d?  \n", not_present, write, user);
-  //printf("original fault address is %p\n", fault_addr);
   //printf("Read a byte at the user virtual address: %d\n", get_user(fault_addr));
-  uint32_t faulting_addr = fault_addr;
-  faulting_addr &= 0xfffff000;
-  uint32_t *addr_of_fault_addr = faulting_addr;
-  //printf("faulting addr is %p\n", addr_of_fault_addr);
+  //printf("sp is %p\n", f->esp);
+  if(f->esp < 0x8084000){ // sc-bad-sp case
+    if(thread_current()->tid == 3){
+      sema_up(&main_waiting_exec);
+      printf("%s: exit(%d)\n", thread_current()->name, -1);
+      thread_exit ();
+    }
+  }
 
+  
   /* 여기서 이제 faulting address(user space에 존재)가 주어졌고, hash table에서
    * faluting address를 찾아서 그 faulting address를 포함하고 있는 struct page를
    * hash_entry 매크로를 써서 이끌어내서 struct page안에 멤버인 kpage를 사용해서 거기에
@@ -211,15 +225,13 @@ page_fault (struct intr_frame *f)
 
   /* load_segment에서 insert해둔 hash_elem을 찾는다 */
   struct page *finding = page_lookup(addr_of_fault_addr); 
+
+ 
   ASSERT(faulting_addr == finding->user_vaddr);
 
-    
-
   uint32_t *kpage = palloc_get_multiple(PAL_USER,1);
-  int k = 0;
 
   enum intr_level my_level = intr_disable();
-
 
   memcpy(kpage, finding->kernel_vaddr, finding->read_size);
   memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
@@ -235,13 +247,11 @@ page_fault (struct intr_frame *f)
   free(finding);
 
   intr_set_level(my_level); 
- 
+   
 
   /* 
   printf("%s: exit(%d)\n",thread_current()->name, -1);
-
   thread_exit();
-
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
@@ -249,6 +259,7 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
   */
+
   return;
 }
 

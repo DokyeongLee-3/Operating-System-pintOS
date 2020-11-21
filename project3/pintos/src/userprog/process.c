@@ -1027,6 +1027,8 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
 
+//printf("process_wait and my tid is %d\n", thread_current()->tid);
+
   if(child_tid == TID_ERROR){
     return -1;
   }
@@ -1156,6 +1158,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+
   hash_init(&(thread_current()->pages), page_hash, page_less, NULL);
 
 
@@ -1370,10 +1373,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   uint8_t required_pages = DIV_ROUND_UP(read_bytes,PGSIZE);
 
 /* kernel pool에서 필요한 만큼페이지 할당해서 여기 파일의 segment 전부를 적어둔다 */
-//printf("!!!!!argument ofs is %d\n", ofs);
   file_seek (file, ofs);
-//printf("!!!!!In load segment, file offset is %d\n", file->pos);
-//printf("Even though in load_segment, indoe_length is : %d\n", inode_length(file->inode));
   /* 매뉴얼에서 이 while loop 고치라고 함 (4.3.2 Paging)*/
 
 
@@ -1393,12 +1393,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       uint32_t *backup_kpage = palloc_get_page(PAL_ZERO);
 
       int k = 0;      
- 
+
+//printf("In load segment, user process address is %p\n", upage); 
 //printf("********address of spt is %p********\n", spt_entry);
-//printf(">>>>>>>>>In load segment, backup_kpage is %d<<<<<<<<<\n",backup_kpage);
 
       spt_entry->kernel_vaddr = backup_kpage;
-//printf(">>>>>>>>>In load segment, backup_kpage is %p <<<<<<<<<<\n", backup_kpage);
  
       spt_entry->user_vaddr = upage;
       spt_entry->read_size = page_read_bytes;
@@ -1417,7 +1416,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       hash_insert(&(thread_current()->pages), &(spt_entry->hash_elem));
 
 
-//printf(">>>>>>>>>In load segment, upage is %p <<<<<<<<<<\n", upage);
 //printf(">>>>>>>>>In load segment, size is %p <<<<<<<<<<\n", page_read_bytes);
 
       /* Advance. */

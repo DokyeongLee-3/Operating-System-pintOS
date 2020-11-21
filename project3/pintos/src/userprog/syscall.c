@@ -7,6 +7,9 @@
 #include "filesys/inode.h"
 #include "threads/synch.h"
 #include "userprog/process.h"
+#include "vm/page.h"
+#include "lib/kernel/list.h"
+#include "lib/kernel/hash.h"
 
 extern struct list all_list;
 
@@ -53,7 +56,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 {
 
 enum intr_level my_level = intr_disable();
-//printf("syscall number is %d and my tid is %d and my parent is %d\n", *(uint32_t *)(f->esp), thread_current()->tid, thread_current()->my_parent);
 
   struct list_elem *e = list_front(&all_list);
   struct thread *parent;
@@ -127,7 +129,7 @@ enum intr_level my_level = intr_disable();
 
   else if(*(uint32_t *)f->esp == 1){ //SYS_EXIT void exit(int status)
 
-//printf("sys exit and thread name is %s\n", thread_current()->name);
+//printf("sys exit and my tid is %d\n", thread_current()->tid);
 
   enum intr_level old_level = intr_disable();
 
@@ -169,7 +171,25 @@ enum intr_level my_level = intr_disable();
 // -> 이때는 sema_up을 하면 안됨. 예를 들어 부모가 tid=21이고, 자식이 tid=22, 23 인 경우 22는 multi-oom ~ -k 라는 명령어를 실행시키므로 부모인 tid=21이 sema_down을 안함
 // -> 이때 sema_up을 해버리면 자칫 21과 23 사이에 걸린 semaphore를 sema_up 해버릴 수 있음
 
+     /* exit할때 user pool에 load해준 page palloc_free_multiple 해주기
+      * palloc_free_multiple에서 frame_table 알아서 비워줄 것 */ 
 
+     
+     while(!hash_empty(&thread_current()->pages)){
+
+       int i = 0;
+       for(; i < thread_current()->pages.bucket_cnt; i++){
+
+         while(!list_empty(&thread_current()->pages.buckets[i])){
+           struct page *temp = list_front(&thread_current()->pages.buckets[i]);
+           palloc_free_page(temp->kernel_vaddr);
+           hash_delete(&thread_current()->pages, &temp->hash_elem);
+           //free(temp);
+           // spt_entry, 그 kernel_pool page 메모리 해제, hash에서 지우기(hash_delete)
+         }
+       }
+     }
+     
       int8_t index = 0;
       struct file *wasted;
 
@@ -437,7 +457,7 @@ enum intr_level my_level = intr_disable();
       }
       if(find == false){ //multi-oom 경우처럼 abnormal하게 종료된 thread(sys_exit을 안부르고 끝낸 경우)를 wait하도록 한 경우 or 이미 exit한 자식을 찾으려고 하거나 or wait-twice.c 처럼 한번 wait한 자식을 또 wait 하려고 하면 thread를 모아놓은 all_list에서 찾을 수 없고 이러면 exit_status_of_child멤버에서 자식의 exit_status 찾아내자
 
-      //printf("cannot find and exit status is %d!!!\n", thread_current()->exit_status_of_child[(*(uint32_t *)(f->esp+4))%44]);
+
        
         f->eax = thread_current()->exit_status_of_child[(*(uint32_t *)(f->esp+4))%44];
         //wait-twice.c 처럼 이미 한번 wait해서 reap한 자식을 또 wait하려고 하는 경우도

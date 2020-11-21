@@ -36,6 +36,7 @@ struct pool
   };
 
 extern uint32_t *frame_table;
+extern uint8_t *which_process;
 
 uint16_t num_of_user_pool_pages;
 uint16_t num_of_kernel_pool_pages;
@@ -153,6 +154,7 @@ palloc_get_page (enum palloc_flags flags)
 void
 palloc_free_multiple (void *pages, size_t page_cnt) 
 {
+
   struct pool *pool;
   size_t page_idx;
 
@@ -179,7 +181,9 @@ palloc_free_multiple (void *pages, size_t page_cnt)
   int k = page_idx;
   for(; k < page_idx + page_cnt; k = k+1){
     frame_table[k] = 0; // user virtual address가 아니라 그냥 0 적혀있으면 사용중이 아니란 의미
+    which_process[k] = 0;
   }
+  
 
 }
 
