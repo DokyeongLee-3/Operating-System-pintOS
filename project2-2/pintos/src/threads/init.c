@@ -1,3 +1,4 @@
+#include "vm/frame.h"
 #include "threads/init.h"
 #include <console.h>
 #include <debug.h>
@@ -37,9 +38,9 @@
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
 #endif
-
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
+uint32_t num_of_pagedir_index;
 
 #ifdef FILESYS
 /* -f: Format the file system? */
@@ -127,12 +128,15 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
+
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */
 
+
   run_actions (argv);
 
+  frame_table_free();
   /* Finish up. */
   shutdown ();
   thread_exit ();
@@ -163,7 +167,10 @@ paging_init (void)
   extern char _start, _end_kernel_text;
 
   pd = init_page_dir = palloc_get_page (PAL_ASSERT | PAL_ZERO);
+//printf("******************address of pagedir base is %p********************\n", pd);
   pt = NULL;
+  //page directory, page table index 수(아마 항상 1024) 
+  num_of_pagedir_index = init_ram_pages;
   for (page = 0; page < init_ram_pages; page++)
     {
       uintptr_t paddr = page * PGSIZE;
@@ -175,6 +182,7 @@ paging_init (void)
       if (pd[pde_idx] == 0)
         {
           pt = palloc_get_page (PAL_ASSERT | PAL_ZERO);
+//printf("******************address of pagetable base is %p********************\n", pt);
           pd[pde_idx] = pde_create (pt);
         }
 

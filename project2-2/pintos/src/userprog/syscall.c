@@ -4,20 +4,18 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "pagedir.h"
-#include "filesys/file.h"
-#include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/synch.h"
 #include "userprog/process.h"
 
 extern struct list all_list;
 
-struct file
-  {
-    struct inode *inode;        /* File's inode. */
-    off_t pos;                  /* Current position. */
-    bool deny_write;            /* Has file_deny_write() been called? */
-  };
+//struct file
+//  {
+//    struct inode *inode;        /* File's inode. */
+//    off_t pos;                  /* Current position. */
+//    bool deny_write;            /* Has file_deny_write() been called? */
+//  };
 
 struct inode_disk
   {
@@ -622,7 +620,7 @@ enum intr_level my_level = intr_disable();
       int16_t fd = 0;
       while(thread_current()->array_of_fd[fd] != *(uint32_t *)(f->esp+20)){
         fd = fd + 1;
-    }
+      }
 
       struct file *file_ = thread_current()->file_descriptor_table[fd];
     //printf("file descriptor struct address in read : %p\n", file_); 

@@ -18,6 +18,7 @@
 */
 
 /* Page table index (bits 12:21). */
+/* PGBITS는 12 */
 #define	PTSHIFT PGBITS		           /* First page table bit. */
 #define PTBITS  10                         /* Number of page table bits. */
 #define PTSPAN  (1 << PTBITS << PGBITS)    /* Bytes covered by a page table. */

@@ -47,6 +47,7 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
+
   if (pos < inode->data.length)
     return inode->data.start + pos / BLOCK_SECTOR_SIZE;
   else
@@ -200,6 +201,7 @@ inode_remove (struct inode *inode)
 off_t
 inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) 
 {
+
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
@@ -212,21 +214,29 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
       off_t inode_left = inode_length (inode) - offset;
+printf("inode_lenfth(inode): %d\n", inode_length (inode));
+//printf("offset is %d\n", offset);
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
       int min_left = inode_left < sector_left ? inode_left : sector_left;
-
+//printf("inode_left: %d\n", inode_left);
+//printf("sector_left: %d\n", sector_left);
+//printf("min_left: %d\n",min_left);
       /* Number of bytes to actually copy out of this sector. */
       int chunk_size = size < min_left ? size : min_left;
-      if (chunk_size <= 0)
+      if (chunk_size <= 0){
+//printf("here0000??\n");
         break;
+      }
 
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
+//printf("here11?\n");
           /* Read full sector directly into caller's buffer. */
           block_read (fs_device, sector_idx, buffer + bytes_read);
         }
       else 
         {
+//printf("here22?\n");
           /* Read sector into bounce buffer, then partially copy
              into caller's buffer. */
           if (bounce == NULL) 

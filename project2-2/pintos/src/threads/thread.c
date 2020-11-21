@@ -485,7 +485,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->abnormal_child = 0;
 
   t->load_success = true;
-
+ 
   list_push_back (&all_list, &t->allelem);
 }
 

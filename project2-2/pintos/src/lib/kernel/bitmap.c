@@ -100,10 +100,22 @@ struct bitmap *
 bitmap_create_in_buf (size_t bit_cnt, void *block, size_t block_size UNUSED)
 {
   struct bitmap *b = block;
+
+
+  //printf("**************b is %p**************\n", b);
+  //printf("*************b+1 is %p*************\n", (elem_type *) (b + 1));
   
   ASSERT (block_size >= bitmap_buf_size (bit_cnt));
 
   b->bit_cnt = bit_cnt;
+  // b->bits = (elem_type*) (b+1); 이라 쓰고 b->bits[idx] 이런식이 가능한 이유는 
+  /* -----------------------------------------------
+ *  | struct bitmap의 size | bits[0] | bits[1] | ....| 
+ *  ------------------------------------------------
+ *                         ^
+ *                         |
+ *                       (b+1) 
+ */
   b->bits = (elem_type *) (b + 1);
   bitmap_set_all (b, false);
   return b;
