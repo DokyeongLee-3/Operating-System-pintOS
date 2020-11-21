@@ -1,7 +1,5 @@
 #include "userprog/pagedir.h"
-#include "threads/thread.h"
 #include <stdbool.h>
-#include "threads/synch.h"
 #include <stddef.h>
 #include <string.h>
 #include "threads/init.h"
@@ -10,17 +8,6 @@
 
 static uint32_t *active_pd (void);
 static void invalidate_pagedir (uint32_t *);
-extern uint32_t *frame_table;
-extern uint8_t *which_process;
-
-struct pool
-  {
-    struct lock lock;
-    struct bitmap *used_map;
-    uint8_t *base;
-  };
-
-extern struct pool kernel_pool, user_pool;
 
 /* Creates a new page directory that has mappings for kernel
    virtual addresses, but none for user virtual addresses.
@@ -118,23 +105,13 @@ pagedir_set_page (uint32_t *pd, void *upage, void *kpage, bool writable)
   ASSERT (is_user_vaddr (upage));
   ASSERT (vtop (kpage) >> PTSHIFT < init_ram_pages);
   ASSERT (pd != init_page_dir);
-  /* upage가 가리키는 page table entry 얻어내서
-   * 그 entry가 가리키는 곳을 kpage가 가리키는 곳
-   * 즉 진짜 physical memory의 frame으로 매핑해줌 
-   * (kpage가 물리 메모리 frame이랑 순서대로 
-   * 1대 1 매핑이어서 그냥 upage를 kpage로 매핑하는 식으로
-   * 해주고 여기서 진짜 user virtual memory -> physical frame
-   * 매핑 해주는 듯*/ 
-  /* lookup page는 upage에 대한 page table entry의 주소를 리턴 */
+
   pte = lookup_page (pd, upage, true);
 
   if (pte != NULL) 
     {
       ASSERT ((*pte & PTE_P) == 0);
       *pte = pte_create_user (kpage, writable);
-      //int frame_index = ((uint8_t *)kpage - (user_pool.base))/PGSIZE;
-      //frame_table[frame_index] = upage;
-      //which_process[frame_index] = thread_current()->tid;
       return true;
     }
   else
@@ -224,7 +201,6 @@ pagedir_is_accessed (uint32_t *pd, const void *vpage)
 void
 pagedir_set_accessed (uint32_t *pd, const void *vpage, bool accessed) 
 {
-//printf(">>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<\n");
   uint32_t *pte = lookup_page (pd, vpage, false);
   if (pte != NULL) 
     {
