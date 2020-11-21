@@ -181,6 +181,15 @@ page_fault (struct intr_frame *f)
 
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
+
+  if(fault_addr == NULL || fault_addr == (int *)0xC0000000){ // bad_read case
+    if(thread_current()->tid == 3){
+      sema_up(&main_waiting_exec);
+      printf("%s: exit(%d)\n", thread_current()->name, -1);
+      thread_exit ();
+    }
+  }
+
   intr_enable ();
 
   /* Count page faults. */
