@@ -9,6 +9,7 @@
 #include "threads/vaddr.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
+#include "devices/block.h"
 
 /* Number of page faults processed. */
 extern struct semaphore main_waiting_exec;
@@ -19,6 +20,32 @@ static long long page_fault_cnt;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
+
+struct pool
+  {
+    struct lock lock;                   /* Mutual exclusion. */
+    struct bitmap *used_map;            /* Bitmap of free pages. */
+    uint8_t *base;                      /* Base of pool. */
+  };
+
+extern struct pool kernel_pool, user_pool;
+
+struct block
+  {
+    struct list_elem list_elem;         /* Element in all_blocks. */
+
+    char name[16];                      /* Block device name. */
+    enum block_type type;                /* Type of block device. */
+    block_sector_t size;                 /* Size in sectors. */
+
+    const struct block_operations *ops;  /* Driver operations. */
+    void *aux;                          /* Extra data owned by driver. */
+
+    unsigned long long read_cnt;        /* Number of sectors read. */
+    unsigned long long write_cnt;       /* Number of sectors written. */
+  };
+
+extern struct block;
 
 struct inode_disk
   {
@@ -37,6 +64,8 @@ struct inode
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
   };
+
+int c = 0;
 
 
 static int
@@ -160,7 +189,6 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
@@ -174,10 +202,10 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
 
-//printf("page fault.....and tid is %d and esp is %p\n",thread_current()->tid, f->esp);
 
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
+  intr_enable ();
 
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
@@ -186,9 +214,12 @@ page_fault (struct intr_frame *f)
   uint32_t faulting_addr = fault_addr;
   faulting_addr &= 0xfffff000;
   uint32_t *addr_of_fault_addr = faulting_addr;
-  
-  struct page *finding = page_lookup(addr_of_fault_addr);
 
+  //printf("fault addr is %p\n", addr_of_fault_addr);
+  //printf("stack pointer is %p\n", f->esp);
+
+ 
+  struct page *finding = page_lookup(addr_of_fault_addr);
 
   if(fault_addr == NULL || fault_addr == (int *)0xC0000000){ // for all bad-* tests 
     if(thread_current()->tid == 3){
@@ -198,9 +229,10 @@ page_fault (struct intr_frame *f)
     }
   }
 
+
   /* 보통 stack limit은 64MB까지라 했으니 esp가 PHYS_BASE-64MB 밑으로
    * 내려가면 invalid esp로 간주하자? */ 
-  if(f->esp < 0xbc000000){  // wait-killed, sc-bad-sp
+  if(addr_of_fault_addr < PHYS_BASE-0x4000000 && addr_of_fault_addr > 0xb0000000){  // wait-killed, sc-bad-sp 사실 esp가 valid한게 정확하게 어디까지인지 아직 모르겠음
     if(thread_current()->my_parent == 1){
       sema_up(&main_waiting_exec);
       printf("%s: exit(%d)\n", thread_current()->name, -1);
@@ -212,9 +244,34 @@ page_fault (struct intr_frame *f)
        thread_exit ();
     }  
   }
-  
 
-  intr_enable ();
+  if(finding == NULL){
+    //printf("thread esp is %p\n", thread_current()->esp); 
+    uint32_t mask_esp = f->esp;   // pt-grow-bad
+    mask_esp = mask_esp & 0xfffff000;
+    if(addr_of_fault_addr < mask_esp){  
+      if(thread_current()->my_parent == 1){
+        sema_up(&main_waiting_exec);
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        thread_exit ();
+      }
+      if(thread_current()->my_parent == 3){
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        sema_up(&exec_waiting_child_simple);
+        thread_exit ();
+      }
+    }
+
+    else{
+      //printf("grow stack...\n");
+      uint32_t temp = addr_of_fault_addr;
+      temp &= 0xfffff000;
+      uint32_t *new_stack_page = palloc_get_multiple(PAL_USER,1);
+      if (!install_page ((uint32_t *)temp, new_stack_page, 1))
+        palloc_free_page (new_stack_page);
+      return;
+    }
+  }
 
   /* Count page faults. */
   page_fault_cnt++;
@@ -223,7 +280,6 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
@@ -244,8 +300,6 @@ page_fault (struct intr_frame *f)
 
   uint32_t *kpage = palloc_get_multiple(PAL_USER,1);
 
-  enum intr_level my_level = intr_disable();
-
   memcpy(kpage, finding->kernel_vaddr, finding->read_size);
   memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
   
@@ -254,13 +308,8 @@ page_fault (struct intr_frame *f)
   }
 
   remove_elem(&(thread_current()->pages), &finding->hash_elem);  
- 
   palloc_free_page(finding->kernel_vaddr);
-
   free(finding);
-
-  intr_set_level(my_level); 
-   
 
   /* 
   printf("%s: exit(%d)\n",thread_current()->name, -1);

@@ -107,6 +107,7 @@ struct thread
     int16_t abnormal_child; //abnormal하게 종료된 child의 tid
 #endif
     struct hash pages; //supplemental page table entry
+    uint32_t *esp;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

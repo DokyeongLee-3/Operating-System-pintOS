@@ -6,17 +6,6 @@
 #include "lib/kernel/hash.h"
 
 
-/*
-unsigned my_divisor(const void *buf_, size_t, size){
-  const unsigned char *buf = buf_;
-  unsigned hash = buf
-
-  ASSERT (buf != NULL);
-  hash
-}
-*/
-
-
 unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED){
   const struct page *p = hash_entry(p_, struct page, hash_elem);
   //printf("######## argument is %p ###########\n", p->user_vaddr);
@@ -39,6 +28,5 @@ struct page *page_lookup(const void *address){
 
   e = hash_find(&(thread_current()->pages), &p.hash_elem);
 
- 
   return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }

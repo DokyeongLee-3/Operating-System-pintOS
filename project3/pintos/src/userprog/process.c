@@ -215,17 +215,6 @@ process_execute (const char *file_name)
     else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 1){
       sema_init(&multichild[41], 0);
     }
-/*
-    else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 2){
-      sema_init(&multichild[42], 0);
-    }
-    else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 3){
-      sema_init(&multichild[43], 0);
-    }
-    else if(thread_current()->tid  > 44 && thread_current()->tid % 44 == 4){
-      sema_init(&multichild[44], 0);
-    }
-*/    
 
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
 
@@ -250,10 +239,8 @@ process_execute (const char *file_name)
   }
 
   else if(thread_current()->tid == 3){
-    //printf("sema down and my pid is %d\n", thread_current()->tid);
-    
+
     sema_down(&exec_waiting_child_simple);
-    //printf("escape from exec_waiting_child_simple and my tid is %d\n",thread_current()->tid);
   }
   
   else if(thread_current()->tid % 44 == 4){ // rox-multichild, multi-recurse에서 쓰임
@@ -788,20 +775,12 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-
-  // file_name을 copy해둔 char*로 parse를 진행해보자
-  /*
-  char my_copy[100];
-  memset(my_copy, 0, sizeof file_name);
-  strlcpy(my_copy, file_name, 20);
-  */
-
-    success = load (file_name, &if_.eip, &if_.esp);
-//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+  success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success) { 
+    palloc_free_page (file_name);
+
 // memory 부족으로 load 실패하는 경우도 부모의 exit_status_of_child에 -1 쓰고
 // 부모는 sys_exec에서 자식 pid의 index에 해당하는 exit_stauts_of_child가 -1이면 
 // return -1(FAQ에 나와있음)
@@ -816,11 +795,7 @@ start_process (void *file_name_)
       }
     }
 
-    //if(thread_current()->tid <= 44)
     t->exit_status_of_child[(thread_current()->tid)%44] = -1;
-    //else if(thread_current()->tid > 44){
-    //  t->exit_status_of_child[(
-    //}
 
     if(thread_current()->my_parent == 1){ // 내가 pid가 3이면 나의 부모는 pid가 1
       sema_up(&main_waiting_exec);
@@ -991,8 +966,6 @@ start_process (void *file_name_)
 //printf("sema up, my tid is %d\n", thread_current()->tid);
       sema_up(&multichild[44]);
     }
-    
-
     thread_exit ();
   }
   else{
@@ -1000,7 +973,6 @@ start_process (void *file_name_)
     thread_current()->load_success = true;  
   }
 
-//printf("start user program %s\n", my_copy);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -1158,7 +1130,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
-
+  //printf("MY tid is %d and hash_init\n", thread_current()->tid);
   hash_init(&(thread_current()->pages), page_hash, page_less, NULL);
 
 
@@ -1364,19 +1336,16 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
-//printf("@@@@@@@@@@@@@@@ load segment start @@@@@@@@@@@@@@@@\n");
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
+
 
   uint8_t required_pages = DIV_ROUND_UP(read_bytes,PGSIZE);
 
 /* kernel pool에서 필요한 만큼페이지 할당해서 여기 파일의 segment 전부를 적어둔다 */
   file_seek (file, ofs);
   /* 매뉴얼에서 이 while loop 고치라고 함 (4.3.2 Paging)*/
-
-
-  int cnt = 0;
   while (read_bytes > 0 || zero_bytes > 0) 
     {
       /* Calculate how to fill this page.
@@ -1387,20 +1356,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       struct page *spt_entry = malloc(sizeof(struct page));
 //printf("****************this time read bytes: %d / zero_bytes: %d *******************\n", read_bytes, zero_bytes);   
+
       // kernel_pool에서 frame 할당 받아서 여기에 file 읽어두고
       // 나중에 page fault뜨면 여기서 file 읽어와서 user frame에 load해주자
       uint32_t *backup_kpage = palloc_get_page(PAL_ZERO);
 
-      int k = 0;      
-
-//printf("In load segment, user process address is %p\n", upage); 
+//printf("In load segment, user process address is %p and my tid is %d\n", upage, thread_current()->tid); 
 //printf("********address of spt is %p********\n", spt_entry);
-
+//
       spt_entry->kernel_vaddr = backup_kpage;
- 
       spt_entry->user_vaddr = upage;
       spt_entry->read_size = page_read_bytes;
       spt_entry->writable = writable;
+      spt_entry->zero_size = page_zero_bytes;
 
       if (file_read (file, backup_kpage, page_read_bytes) != (int) page_read_bytes)
         {
@@ -1409,19 +1377,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         }
       memset (backup_kpage + page_read_bytes, 0, page_zero_bytes);
 
-//printf("$$$$$$$$$In load_segment, size is %p$$$$$$$$$$\n", spt_entry->size);
-//printf("$$$$$$$$$In load_segment, file inode is %p$$$$$$$$$$\n", file->inode);
-
       hash_insert(&(thread_current()->pages), &(spt_entry->hash_elem));
 
-
-//printf(">>>>>>>>>In load segment, size is %p <<<<<<<<<<\n", page_read_bytes);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-      cnt += 1;
     }
   return true;
 }

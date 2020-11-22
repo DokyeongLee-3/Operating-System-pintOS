@@ -485,6 +485,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->abnormal_child = 0;
 
   t->load_success = true;
+
+  t->esp = 0xbffff000;
+
+  //hash_init(&(t->pages), page_hash, page_less, NULL);
  
   list_push_back (&all_list, &t->allelem);
 }

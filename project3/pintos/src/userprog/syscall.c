@@ -174,9 +174,8 @@ enum intr_level my_level = intr_disable();
      /* exit할때 user pool에 load해준 page palloc_free_multiple 해주기
       * palloc_free_multiple에서 frame_table 알아서 비워줄 것 */ 
 
-     
+    
      while(!hash_empty(&thread_current()->pages)){
-
        int i = 0;
        for(; i < thread_current()->pages.bucket_cnt; i++){
 
@@ -184,12 +183,12 @@ enum intr_level my_level = intr_disable();
            struct page *temp = list_front(&thread_current()->pages.buckets[i]);
            palloc_free_page(temp->kernel_vaddr);
            hash_delete(&thread_current()->pages, &temp->hash_elem);
-           //free(temp);
            // spt_entry, 그 kernel_pool page 메모리 해제, hash에서 지우기(hash_delete)
          }
        }
      }
-     
+
+
       int8_t index = 0;
       struct file *wasted;
 
@@ -369,6 +368,7 @@ enum intr_level my_level = intr_disable();
 
   else if(*(uint32_t *)f->esp == 2){ //SYS_EXEC
 
+//printf("SYS_EXEC start!\n");
 
     if(pagedir_get_page(thread_current()->pagedir, *(uint32_t *)(f->esp+4)) == NULL){
 
@@ -456,9 +456,7 @@ enum intr_level my_level = intr_disable();
         }
       }
       if(find == false){ //multi-oom 경우처럼 abnormal하게 종료된 thread(sys_exit을 안부르고 끝낸 경우)를 wait하도록 한 경우 or 이미 exit한 자식을 찾으려고 하거나 or wait-twice.c 처럼 한번 wait한 자식을 또 wait 하려고 하면 thread를 모아놓은 all_list에서 찾을 수 없고 이러면 exit_status_of_child멤버에서 자식의 exit_status 찾아내자
-
-
-       
+  
         f->eax = thread_current()->exit_status_of_child[(*(uint32_t *)(f->esp+4))%44];
         //wait-twice.c 처럼 이미 한번 wait해서 reap한 자식을 또 wait하려고 하는 경우도
         //있기 때문에 한번 쓰고 나서는 초기화
