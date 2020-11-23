@@ -247,21 +247,50 @@ page_fault (struct intr_frame *f)
 
   if(finding == NULL){
     uint32_t sp = f->esp;
-    if(sp-faulting_addr >= PGSIZE && f->error_code == 4){  //pt-grow-bad
-      if(thread_current()->my_parent == 1){
-        printf("%s: exit(%d)\n", thread_current()->name, -1);
-        sema_up(&main_waiting_exec);
-        thread_exit ();
-      }
-      if(thread_current()->my_parent == 3){
-        printf("%s: exit(%d)\n", thread_current()->name, -1);
-        sema_up(&exec_waiting_child_simple);
-        thread_exit ();
+
+    if(f->error_code == 2){ //pt-bad-read
+      if(f->esp > faulting_addr){
+        if(thread_current()->my_parent == 1){
+          printf("%s: exit(%d)\n", thread_current()->name, -1);
+          sema_up(&main_waiting_exec);
+          thread_exit ();
+        }
+        if(thread_current()->my_parent == 3){
+          printf("%s: exit(%d)\n", thread_current()->name, -1);
+          sema_up(&exec_waiting_child_simple);
+          thread_exit ();
+        }
       }
     }
 
-    else{
-      //printf("grow stack...\n");
+    if(f->error_code == 4){
+      if(sp > faulting_addr && sp-faulting_addr > PGSIZE){//pt-grow-bad
+        if(thread_current()->my_parent == 1){
+          printf("%s: exit(%d)\n", thread_current()->name, -1);
+          sema_up(&main_waiting_exec);
+          thread_exit ();
+        }
+        if(thread_current()->my_parent == 3){
+          printf("%s: exit(%d)\n", thread_current()->name, -1);
+          sema_up(&exec_waiting_child_simple);
+          thread_exit ();
+        }
+      }
+
+      else if(sp < faulting_addr && faulting_addr - sp > PGSIZE){ 
+        if(thread_current()->my_parent == 1){
+          printf("%s: exit(%d)\n", thread_current()->name, -1);
+          sema_up(&main_waiting_exec);
+          thread_exit ();
+        }
+        if(thread_current()->my_parent == 3){
+          printf("%s: exit(%d)\n", thread_current()->name, -1);
+          sema_up(&exec_waiting_child_simple);
+          thread_exit ();
+        }
+      }
+   }
+    if(f->error_code == 6){ //pt-grow-pusha
       uint32_t temp = addr_of_fault_addr;
       temp &= 0xfffff000;
       uint32_t *new_stack_page = palloc_get_multiple(PAL_USER,1);
@@ -269,7 +298,7 @@ page_fault (struct intr_frame *f)
       if (!install_page ((uint32_t *)temp, new_stack_page, 1))
         palloc_free_page (new_stack_page);
       return;
-    }
+   }
   }
 
   /* Count page faults. */

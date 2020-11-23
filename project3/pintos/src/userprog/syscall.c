@@ -794,6 +794,34 @@ enum intr_level my_level = intr_disable();
     }
     intr_set_level(old_level); 
    }
+
+  else if(*(uint32_t *)f->esp == 13){ //SYS_MMAP
+
+    int i = 0;
+    bool valid_fd = false;
+    for( ; i < 10; i++){
+      if(thread_current()->array_of_fd[i] == *(uint32_t *)(f->esp+16)){
+        valid_fd = true;
+        break;
+      }
+    }
+    if(valid_fd == false){
+      if(thread_current()->my_parent == 1){
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        sema_up(&main_waiting_exec);
+        thread_exit ();
+      }
+      if(thread_current()->my_parent == 3){
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        sema_up(&exec_waiting_child_simple);
+        thread_exit ();
+      }
+    }
+  }
+
+  else if(*(uint32_t *)f->esp == 14){ //SYS_UNMAP
+
+  }
   
   else{ 
     printf("%s: exit(%d)\n", front, -1);
