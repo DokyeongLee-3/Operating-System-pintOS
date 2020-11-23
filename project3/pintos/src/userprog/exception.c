@@ -215,12 +215,14 @@ page_fault (struct intr_frame *f)
   faulting_addr &= 0xfffff000;
   uint32_t *addr_of_fault_addr = faulting_addr;
 
-  //printf("fault addr is %p\n", addr_of_fault_addr);
-  //printf("stack pointer is %p\n", f->esp);
+  printf("fault addr is %p\n", fault_addr);
+  printf("stack pointer is %p\n", f->esp);
+  printf("error code is %d\n", f->error_code);
+  printf("code segment is %0x\n", *f->eip);
+  //printf("data segment is %p\n", f->ss);
 
  
   struct page *finding = page_lookup(addr_of_fault_addr);
-
   if(fault_addr == NULL || fault_addr == (int *)0xC0000000){ // for all bad-* tests 
     if(thread_current()->tid == 3){
       sema_up(&main_waiting_exec);
@@ -229,30 +231,29 @@ page_fault (struct intr_frame *f)
     }
   }
 
-
-  /* 보통 stack limit은 64MB까지라 했으니 esp가 PHYS_BASE-64MB 밑으로
-   * 내려가면 invalid esp로 간주하자? */ 
-  if(addr_of_fault_addr < PHYS_BASE-0x4000000 && addr_of_fault_addr > 0xb0000000){  // wait-killed, sc-bad-sp 사실 esp가 valid한게 정확하게 어디까지인지 아직 모르겠음
-    if(thread_current()->my_parent == 1){
-      sema_up(&main_waiting_exec);
-      printf("%s: exit(%d)\n", thread_current()->name, -1);
-      thread_exit ();
-    }
-    if(thread_current()->my_parent == 3){
-       printf("%s: exit(%d)\n", thread_current()->name, -1);
-       sema_up(&exec_waiting_child_simple);
-       thread_exit ();
-    }  
-  }
-
-  if(finding == NULL){
-    //printf("thread esp is %p\n", thread_current()->esp); 
-    uint32_t mask_esp = f->esp;   // pt-grow-bad
-    mask_esp = mask_esp & 0xfffff000;
-    if(addr_of_fault_addr < mask_esp){  
+  /* 0x8048000 부터 load하는거같으니 그 밑에는 invalid? 모르겠음 */
+  if(f->error_code == 0){ 
+    if(addr_of_fault_addr < 0x8048000 || addr_of_fault_addr < thread_current()->esp){  //sc-bad-sp (사실 esp가 valid한게 정확하게 어디까지인지 아직 모르겠음)
       if(thread_current()->my_parent == 1){
         sema_up(&main_waiting_exec);
         printf("%s: exit(%d)\n", thread_current()->name, -1);
+        thread_exit ();
+      }
+      if(thread_current()->my_parent == 3){
+         printf("%s: exit(%d)\n", thread_current()->name, -1);
+         sema_up(&exec_waiting_child_simple);
+         thread_exit ();
+      }  
+    }
+  }
+
+
+  if(finding == NULL){
+    uint32_t sp = f->esp;
+    if(sp-faulting_addr >= PGSIZE && f->error_code == 4){  //pt-grow-bad
+      if(thread_current()->my_parent == 1){
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        sema_up(&main_waiting_exec);
         thread_exit ();
       }
       if(thread_current()->my_parent == 3){
@@ -267,6 +268,7 @@ page_fault (struct intr_frame *f)
       uint32_t temp = addr_of_fault_addr;
       temp &= 0xfffff000;
       uint32_t *new_stack_page = palloc_get_multiple(PAL_USER,1);
+      thread_current()->esp = thread_current()->esp - PGSIZE;
       if (!install_page ((uint32_t *)temp, new_stack_page, 1))
         palloc_free_page (new_stack_page);
       return;

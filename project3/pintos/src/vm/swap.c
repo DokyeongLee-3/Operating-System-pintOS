@@ -41,10 +41,8 @@ void swap_in(void *upage, void *kpage, bool writable, block_sector_t sector, voi
   }
 }
 
-void swap_out(uint32_t *pd, uint32_t *uaddr, block_sector_t sector, void *buffer){
+void swap_out(block_sector_t sector, void *buffer){
   block_write(block_get_role(3), sector, buffer);
   my_swap_table->bits[sector] = 1;
   // 원래 있던 물리 메모리에선 자리 빼주기 
-  uint32_t *pte = lookup_page (pd, uaddr, false);
-  *pte = *pte & ~PTE_P; // not present 상태로 만들어주기
 }

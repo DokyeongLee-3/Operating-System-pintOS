@@ -5,6 +5,7 @@
 #include "vm/page.h"
 #include "lib/kernel/hash.h"
 
+/* Manual A.8.5 example 이용 */
 
 unsigned page_hash(const struct hash_elem *p_, void *aux UNUSED){
   const struct page *p = hash_entry(p_, struct page, hash_elem);

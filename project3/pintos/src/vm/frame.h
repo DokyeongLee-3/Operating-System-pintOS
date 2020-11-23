@@ -11,5 +11,5 @@ void frame_table_init(size_t num_of_user_frame);
 
 void frame_table_free();
 
-bool evict_single_frame();
+uint32_t evict_single_frame_and_swap_out();
 
