@@ -215,11 +215,9 @@ page_fault (struct intr_frame *f)
   faulting_addr &= 0xfffff000;
   uint32_t *addr_of_fault_addr = faulting_addr;
 
-  printf("fault addr is %p\n", fault_addr);
-  printf("stack pointer is %p\n", f->esp);
-  printf("error code is %d\n", f->error_code);
-  printf("code segment is %0x\n", *f->eip);
-  //printf("data segment is %p\n", f->ss);
+  //printf("fault addr is %p\n", fault_addr);
+  //printf("stack pointer is %p\n", f->esp);
+  //printf("error code is %d\n", f->error_code);
 
  
   struct page *finding = page_lookup(addr_of_fault_addr);
