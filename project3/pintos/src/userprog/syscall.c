@@ -797,6 +797,11 @@ enum intr_level my_level = intr_disable();
 
   else if(*(uint32_t *)f->esp == 13){ //SYS_MMAP
 
+   //printf("stack pointer in sys_mmap is %p\n", f->esp);
+   //printf("first argument is %d\n", *(uint32_t *)f->esp+4);
+   //printf("second argument is %d\n", *(uint32_t *)f->esp+5);
+   //hex_dump(f->esp, f->esp, 200, 1);
+
     int i = 0;
     bool valid_fd = false;
     for( ; i < 10; i++){

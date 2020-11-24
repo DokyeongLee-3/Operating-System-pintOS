@@ -218,6 +218,7 @@ page_fault (struct intr_frame *f)
   //printf("fault addr is %p\n", fault_addr);
   //printf("stack pointer is %p\n", f->esp);
   //printf("error code is %d\n", f->error_code);
+  thread_current()->esp = f->esp;
  
   struct page *finding = page_lookup(addr_of_fault_addr);
   if(fault_addr == NULL || fault_addr == (int *)0xC0000000){ // for all bad-* tests 
