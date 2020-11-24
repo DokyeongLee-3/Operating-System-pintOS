@@ -80,9 +80,14 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
 
   /* Check for a page table for VADDR.
      If one is missing, create one if requested. */
+
+//printf("virtual address is lookup_page is %p\n", vaddr);
+
   pde = pd + pd_no (vaddr);
+//printf("pd_no(vaddr) is %d\n", pd_no(vaddr));
   if (*pde == 0) 
     {
+//printf("still here?\n");
       if (create)
         {
           pt = palloc_get_page (PAL_ZERO);
@@ -91,8 +96,9 @@ lookup_page (uint32_t *pd, const void *vaddr, bool create)
       
           *pde = pde_create (pt);
         }
-      else
+      else{
         return NULL;
+      }
     }
 
   /* Return the page table entry. */

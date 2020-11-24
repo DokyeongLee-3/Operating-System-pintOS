@@ -325,6 +325,11 @@ page_fault (struct intr_frame *f)
       palloc_free_page (kpage);
     }
 
+    if(thread_current()->pagedir == NULL)
+      pagedir_create();    
+  
+    //lookup_page(thread_current()->pagedir, addr_of_fault_addr, 1); // 필요한건가?
+ 
     remove_elem(&(thread_current()->pages), &finding->hash_elem);  
     palloc_free_page(finding->kernel_vaddr);
     free(finding);

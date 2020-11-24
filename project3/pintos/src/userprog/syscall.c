@@ -659,6 +659,7 @@ enum intr_level my_level = intr_disable();
 
   else if(*(uint32_t *)f->esp == 9){ // SYS_WRITE 
 
+//printf("sys_write and my tid is %d\n", thread_current()->tid);
     enum intr_level old_level = intr_enable();
 
     if(*(uint32_t *)(f->esp+24) > 0xc0000000 || *(uint32_t *)(f->esp+24) < 0x8048000 || *(uint32_t *)(f->esp+24) == NULL){
@@ -687,17 +688,10 @@ enum intr_level my_level = intr_disable();
     }
 
 
-    /*
-    if(thread_current()->file_descriptor_table[*(uint32_t *)(f->esp+20)] == NULL){
-      printf("argument fd is %d\n",*(uint32_t *)(f->esp+20));
-      printf("yes it is removed!!! so cannot write!!\n");
-      f->eax = 0;
-    }
-    */
     else if(*(uint32_t *)(f->esp+20) == 0x1){
       //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 300, 1);
       //bad_write case를 위해서 여기 무언가 필요
-      //printf("*(char *)(f->esp+24) is %s\n", *(char *)(f->esp+24));
+
       putbuf(*(uint32_t *)(f->esp+24), *(uint32_t *)(f->esp+28));
       //sema_up(&main_waiting_exec);
       f->eax = *(uint32_t *)(f->esp+28);
@@ -885,6 +879,15 @@ enum intr_level my_level = intr_disable();
   }
 
   else if(*(uint32_t *)f->esp == 14){ //SYS_UNMAP
+
+    //hex_dump(f->esp, f->esp, 200, 1);
+    //printf("first argument is %0x\n", *(int32_t *)(f->esp+16)); 
+    uint32_t *pte = lookup_page (thread_current()->pagedir, *(int32_t *)(f->esp+16), 0);
+    //printf("user pool page address is %p\n", ptov(*pte));
+
+    //palloc_free_multiple(ptov(*pte));
+    //*pte = *pte & 0xfffffffe; // present bit를 0으로
+    
 
   }
   
