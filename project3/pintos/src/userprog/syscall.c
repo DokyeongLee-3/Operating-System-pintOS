@@ -1,4 +1,7 @@
 #include "userprog/syscall.h"
+#include "userprog/process.h"
+#include "threads/vaddr.h"
+#include "threads/palloc.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -10,6 +13,7 @@
 #include "vm/page.h"
 #include "lib/kernel/list.h"
 #include "lib/kernel/hash.h"
+#include "lib/round.h"
 
 extern struct list all_list;
 
@@ -514,6 +518,7 @@ enum intr_level my_level = intr_disable();
   else if(*(uint32_t *)f->esp == 6){ //SYS_OPEN
   
 //printf("sys open and my tid is %d\n", thread_current()->tid);
+//printf("I will open %s\n", *((uint32_t *)(f->esp+4)));
 
     enum intr_level old_level = intr_enable();
     //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 200, 1);  
@@ -547,7 +552,7 @@ enum intr_level my_level = intr_disable();
 //////////// 수정해야함, 메모리 부족으로 struct thread 멤버중 file_descriptor_table을 50개로 줄였는데 이러면 sys_open 코드 수정해야함 그리고 tid가 400을 넘어갈 정도로 커질 수 있으니, file_descriptor_table을 129개의 배열로 하는 디자인은 바꿔야함///////////////
         struct file *file_ = filesys_open(*((uint32_t *)(f->esp+4)));
         struct thread *now = thread_current();
-        int return_val; // 내가 채우게 될 file_descriptor_table의 index(0에서 시작)
+        int return_val = 2; // 내가 채우게 될 file_descriptor_table의 index(0에서 시작)
 
         if(file_ == NULL){
           f->eax = -1;
@@ -570,6 +575,7 @@ enum intr_level my_level = intr_disable();
 
         else{
           if((struct file *)file_->inode->open_cnt == 1){ //open-normal 처럼 한번만 여는경우
+
             //assert(now->file_descriptor_table[return_val] == NULL); //만약 이 thread가 이 파일을 처음 여는 경우이며, thread가 이때까지 다른 파일을 연적이 없을때
 
 //printf("open_cnt is 1 and my tid is %d\n", thread_current()->tid);            
@@ -582,7 +588,6 @@ enum intr_level my_level = intr_disable();
               
           }
           else{ // open-twice 처럼 같은 프로세스가 같은 파일을 2번 열려고 하는 경우
-
             
             while(now->file_descriptor_table[return_val] != NULL){
               return_val = return_val + 1;
@@ -795,11 +800,16 @@ enum intr_level my_level = intr_disable();
     intr_set_level(old_level); 
    }
 
+
+
   else if(*(uint32_t *)f->esp == 13){ //SYS_MMAP
 
+   enum intr_level my_level = intr_enable();
+
    //printf("stack pointer in sys_mmap is %p\n", f->esp);
-   //printf("first argument is %d\n", *(uint32_t *)f->esp+4);
-   //printf("second argument is %d\n", *(uint32_t *)f->esp+5);
+   //printf("first argument is %d\n", *(int32_t *)(f->esp+16));
+   //printf("second argument is %p\n", *(int32_t *)(f->esp+20));
+   //printf("thread esp is %p\n", thread_current()->esp);
    //hex_dump(f->esp, f->esp, 200, 1);
 
     int i = 0;
@@ -810,7 +820,7 @@ enum intr_level my_level = intr_disable();
         break;
       }
     }
-    if(valid_fd == false){
+    if(valid_fd == false){ //mmap-bad-fd
       if(thread_current()->my_parent == 1){
         printf("%s: exit(%d)\n", thread_current()->name, -1);
         sema_up(&main_waiting_exec);
@@ -822,6 +832,42 @@ enum intr_level my_level = intr_disable();
         thread_exit ();
       }
     }
+
+   
+    if(*(int32_t *)(f->esp+20) == 0){ //mmap-null
+      if(thread_current()->my_parent == 1){
+        //printf("(%s) end\n", thread_current()->name);
+        sema_up(&main_waiting_exec);
+        thread_exit ();
+      }
+      if(thread_current()->my_parent == 3){
+        sema_up(&exec_waiting_child_simple);
+        thread_exit ();
+      }
+    }
+    
+
+////////// 정상적으로 mmap 하는 case /////////////
+
+    i = 0;
+    uint8_t my_fd = 0;
+    for(; i < 10; i++){
+      my_fd = thread_current()->array_of_fd[i];
+      if(my_fd == *(int32_t *)(f->esp+16))
+        break;
+    }
+    //printf("fd is %d\n", my_fd);
+    struct file *file = thread_current()->file_descriptor_table[i];
+    uint8_t required_pages = DIV_ROUND_UP((file->inode->data.length),PGSIZE);
+    uint32_t file_size = file->inode->data.length;
+    uint32_t *user_pool_page = palloc_get_multiple(PAL_USER,required_pages);
+    //printf("file length is %d\n", file->inode->data.length);
+
+    load_segment(file, file->pos, *(int32_t *)(f->esp+20) , file_size, required_pages*PGSIZE-file_size, 1);
+    
+    
+    intr_set_level(my_level);
+
   }
 
   else if(*(uint32_t *)f->esp == 14){ //SYS_UNMAP

@@ -218,7 +218,10 @@ page_fault (struct intr_frame *f)
   //printf("fault addr is %p\n", fault_addr);
   //printf("stack pointer is %p\n", f->esp);
   //printf("error code is %d\n", f->error_code);
-  thread_current()->esp = f->esp;
+  //printf("thread esp is %p\n", thread_current()->esp);
+
+  if(f->esp < 0xC0000000)
+    thread_current()->esp = f->esp; //???
  
   struct page *finding = page_lookup(addr_of_fault_addr);
   if(fault_addr == NULL || fault_addr == (int *)0xC0000000){ // for all bad-* tests 
@@ -248,24 +251,10 @@ page_fault (struct intr_frame *f)
 
   if(finding == NULL){
     uint32_t sp = f->esp;
-
-    if(f->error_code == 2){ //pt-bad-read
-      if(f->esp > faulting_addr){
-        if(thread_current()->my_parent == 1){
-          printf("%s: exit(%d)\n", thread_current()->name, -1);
-          sema_up(&main_waiting_exec);
-          thread_exit ();
-        }
-        if(thread_current()->my_parent == 3){
-          printf("%s: exit(%d)\n", thread_current()->name, -1);
-          sema_up(&exec_waiting_child_simple);
-          thread_exit ();
-        }
-      }
-    }
+    uint32_t tp = thread_current()->esp;
 
     if(f->error_code == 4){
-      if(sp > faulting_addr && sp-faulting_addr > PGSIZE){//pt-grow-bad
+      if(sp < PHYS_BASE && sp > faulting_addr && sp-faulting_addr > PGSIZE){//pt-grow-bad, pt-wrice-code2
         if(thread_current()->my_parent == 1){
           printf("%s: exit(%d)\n", thread_current()->name, -1);
           sema_up(&main_waiting_exec);
@@ -278,7 +267,7 @@ page_fault (struct intr_frame *f)
         }
       }
 
-      else if(sp < faulting_addr && faulting_addr - sp > PGSIZE){ 
+      else if(sp < PHYS_BASE && sp < faulting_addr && faulting_addr - sp > PGSIZE){ 
         if(thread_current()->my_parent == 1){
           printf("%s: exit(%d)\n", thread_current()->name, -1);
           sema_up(&main_waiting_exec);
@@ -299,7 +288,8 @@ page_fault (struct intr_frame *f)
       if (!install_page ((uint32_t *)temp, new_stack_page, 1))
         palloc_free_page (new_stack_page);
       return;
-   }
+    }
+  
   }
 
   /* Count page faults. */
@@ -324,32 +314,21 @@ page_fault (struct intr_frame *f)
    * install_page로 mapping 해준다. 마지막으로 데이터를 써놨던 kernel_pool에서 가져온
    * kpage는 여기서 palloc_free_multiple로 free해준다*/
 
- 
-  ASSERT(faulting_addr == finding->user_vaddr);
 
-  uint32_t *kpage = palloc_get_multiple(PAL_USER,1);
+    ASSERT(faulting_addr == finding->user_vaddr);
 
-  memcpy(kpage, finding->kernel_vaddr, finding->read_size);
-  memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
+    uint32_t *kpage = palloc_get_multiple(PAL_USER,1);
+    memcpy(kpage, finding->kernel_vaddr, finding->read_size);
+    memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
   
-  if (!install_page (addr_of_fault_addr, kpage, finding->writable)){
-    palloc_free_page (kpage);
-  }
+    if (!install_page (addr_of_fault_addr, kpage, finding->writable)){
+      palloc_free_page (kpage);
+    }
 
-  remove_elem(&(thread_current()->pages), &finding->hash_elem);  
-  palloc_free_page(finding->kernel_vaddr);
-  free(finding);
+    remove_elem(&(thread_current()->pages), &finding->hash_elem);  
+    palloc_free_page(finding->kernel_vaddr);
+    free(finding);
 
-  /* 
-  printf("%s: exit(%d)\n",thread_current()->name, -1);
-  thread_exit();
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
-  */
 
   return;
 }
