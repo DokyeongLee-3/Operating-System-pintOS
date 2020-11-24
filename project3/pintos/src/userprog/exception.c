@@ -205,7 +205,7 @@ page_fault (struct intr_frame *f)
 
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-  intr_enable ();
+  enum intr_level my_level = intr_enable ();
 
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
@@ -328,7 +328,6 @@ page_fault (struct intr_frame *f)
     remove_elem(&(thread_current()->pages), &finding->hash_elem);  
     palloc_free_page(finding->kernel_vaddr);
     free(finding);
-
 
   return;
 }

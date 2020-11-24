@@ -17,6 +17,8 @@
 
 extern struct list all_list;
 
+#define MAP_FAILED ((mapid_t) -1)
+typedef int mapid_t;
 //struct file
 //  {
 //    struct inode *inode;        /* File's inode. */
@@ -58,8 +60,8 @@ syscall_init (void) //intr_handlers 배열에 0x30(interrupt)에 해당하는 ha
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-//printf("syscall number is %d and tid is %d\n", *(uint32_t *)f->esp, thread_current()->tid);
 enum intr_level my_level = intr_disable();
+//printf("syscall number is %d and tid is %d\n", *(uint32_t *)f->esp, thread_current()->tid);
 
   struct list_elem *e = list_front(&all_list);
   struct thread *parent;
@@ -111,9 +113,6 @@ enum intr_level my_level = intr_disable();
     intr_set_level(my_level);
   } 
 */
-
-
-
 
 
   char *front;
@@ -836,18 +835,33 @@ enum intr_level my_level = intr_disable();
    
     if(*(int32_t *)(f->esp+20) == 0){ //mmap-null
       if(thread_current()->my_parent == 1){
-        //printf("(%s) end\n", thread_current()->name);
+        f->eax = -1;
         sema_up(&main_waiting_exec);
-        thread_exit ();
+        return;
       }
       if(thread_current()->my_parent == 3){
         sema_up(&exec_waiting_child_simple);
         thread_exit ();
+        return;
+      }
+    }
+
+    uint32_t not_page_aligned = *(int32_t *)(f->esp+20) & 0xfff;
+    if(not_page_aligned != 0){ //mmap-misalign
+      if(thread_current()->my_parent == 1){
+        f->eax = -1;
+        sema_up(&main_waiting_exec);
+        return;
+      }
+      if(thread_current()->my_parent == 3){
+        sema_up(&exec_waiting_child_simple);
+        thread_exit ();
+        return;
       }
     }
     
 
-////////// 정상적으로 mmap 하는 case /////////////
+/////////////// 정상적으로 mmap 하는 case ////////////////
 
     i = 0;
     uint8_t my_fd = 0;
