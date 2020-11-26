@@ -489,6 +489,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->esp = 0xbffff000;
   t->code_segment_base = NULL;
   t->data_segment_base = NULL;
+  i = 0;
+  for( ; i<10; i++)
+    t->mapping[i] = NULL;
   t->code_segment_size = 0;
   t->data_segment_size = 0;
 

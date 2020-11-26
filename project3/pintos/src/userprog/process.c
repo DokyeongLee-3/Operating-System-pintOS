@@ -239,8 +239,9 @@ process_execute (const char *file_name)
   }
 
   else if(thread_current()->tid == 3){
-
+ //printf("sema down and my pid is 3\n");
     sema_down(&exec_waiting_child_simple);
+ //printf("escape from and my tid is 3\n");
   }
   
   else if(thread_current()->tid % 44 == 4){ // rox-multichild, multi-recurse에서 쓰임

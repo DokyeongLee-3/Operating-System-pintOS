@@ -16,7 +16,6 @@
 #include "lib/round.h"
 #include "lib/limits.h"
 
-extern char _start_bss, _end_bss;
 
 typedef unsigned long elem_type;
 #define ELEM_BITS (sizeof (elem_type) * CHAR_BIT)
@@ -695,6 +694,8 @@ enum intr_level my_level = intr_disable();
 
     enum intr_level old_level = intr_enable();
 
+//printf("sys write and tid is %d\n",thread_current()->tid);
+
     if(*(uint32_t *)(f->esp+24) > 0xc0000000 || *(uint32_t *)(f->esp+24) < 0x8048000 || *(uint32_t *)(f->esp+24) == NULL){
       printf("%s: exit(%d)\n", front, -1);
       sema_up(&main_waiting_exec);
@@ -720,18 +721,14 @@ enum intr_level my_level = intr_disable();
       thread_exit();
     }
 
-
     else if(*(uint32_t *)(f->esp+20) == 0x1){
       //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 300, 1);
       //bad_write case를 위해서 여기 무언가 필요
-      //enum intr_level tmp_level = intr_enable();
       putbuf(*(uint32_t *)(f->esp+24), *(uint32_t *)(f->esp+28));
-      //intr_set_level(tmp_level);
       //sema_up(&main_waiting_exec);
       f->eax = *(uint32_t *)(f->esp+28);
     }
     else{
-     
       int16_t index = 0;
       while(thread_current()->array_of_fd[index] != *(uint32_t *)(f->esp+20)){
         index = index + 1;
@@ -1006,6 +1003,12 @@ enum intr_level my_level = intr_disable();
          thread_exit ();
       }
     }
+    int p = 0;
+    for(; p<10; p++){
+      if(thread_current()->mapping[p] == NULL)
+        break;
+    }
+    thread_current()->mapping[p] = *(int32_t *)(f->esp+20);
     f->eax = *(int32_t *)(f->esp+20);
     
     intr_set_level(my_level);

@@ -10,11 +10,14 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "devices/block.h"
+#include "lib/round.h"
 
 /* Number of page faults processed. */
 extern struct semaphore main_waiting_exec;
 extern struct semaphore exec_waiting_child_simple;
 extern uint32_t *lookup_page (uint32_t *pd, const void *vaddr, bool create);
+
+extern struct list all_list;
 
 static long long page_fault_cnt;
 
@@ -215,6 +218,7 @@ page_fault (struct intr_frame *f)
   faulting_addr &= 0xfffff000;
   uint32_t *addr_of_fault_addr = faulting_addr;
 
+  //printf("tid in page fault is %d\n", thread_current()->tid);
   //printf("fault addr is %p\n", fault_addr);
   //printf("stack pointer is %p\n", f->esp);
   //printf("error code is %d\n", f->error_code);
@@ -245,6 +249,25 @@ page_fault (struct intr_frame *f)
          sema_up(&exec_waiting_child_simple);
          thread_exit ();
       }  
+    }
+  }
+  struct list_elem *e = list_front(&all_list);
+  struct thread *parent_thread; // t는 부모 프로세스
+  for(; e != list_end(&all_list); e = list_next(e)){
+    parent_thread = list_entry(e, struct thread, allelem);
+    if(parent_thread->tid == thread_current()->my_parent){
+      break;
+    }
+  }
+  int i = 0;
+  for(; i<10; i++){
+    if(parent_thread->mapping[i] == addr_of_fault_addr){
+      if(thread_current()->my_parent == 3){ // mmap-inherit
+        f->eax = -1;
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        sema_up(&exec_waiting_child_simple);
+        thread_exit();
+      }
     }
   }
 

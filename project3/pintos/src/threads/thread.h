@@ -112,6 +112,7 @@ struct thread
     uint32_t code_segment_size;
     uint32_t *data_segment_base;
     uint32_t data_segment_size;
+    uint32_t *mapping[10];
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
