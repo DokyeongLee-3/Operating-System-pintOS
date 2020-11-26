@@ -774,7 +774,7 @@ enum intr_level my_level = intr_disable();
 
 
   else if(*(uint32_t *)f->esp == 12){ //SYS_CLOSE
-
+//printf("sys close and argument is %d\n", *((uint32_t *)(f->esp+4)));
   
     enum intr_level old_level = intr_enable();
 
@@ -1006,7 +1006,6 @@ enum intr_level my_level = intr_disable();
          thread_exit ();
       }
     }
-
     f->eax = *(int32_t *)(f->esp+20);
     
     intr_set_level(my_level);
@@ -1017,16 +1016,17 @@ enum intr_level my_level = intr_disable();
 
     enum intr_level my_level = intr_disable();
 
-
     //hex_dump(f->esp, f->esp, 200, 1);
-    uint32_t *pte = lookup_page (thread_current()->pagedir, *(int32_t *)(f->esp+16), 0);
+    uint32_t *pte = lookup_page (thread_current()->pagedir, *(int32_t *)(f->esp+4), 0);
     //*pte = *pte & 0xfffffffe; // present bit를 0으로
     uint32_t p = ptov(*pte&0xfffff000);
     uint32_t user_pool_base = user_pool.base;
     uint32_t user_pool_idx = ((p-user_pool_base)/PGSIZE);
     
     palloc_free_multiple((void *)p,1);
-    pagedir_clear_page(thread_current()->pagedir, *(int32_t *)(f->esp+16));
+
+
+    pagedir_clear_page(thread_current()->pagedir, *(int32_t *)(f->esp+4));
 
    
    intr_set_level(my_level); 
