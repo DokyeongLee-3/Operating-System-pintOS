@@ -582,7 +582,9 @@ enum intr_level my_level = intr_disable();
     }
     else{
 //////////// 수정해야함, 메모리 부족으로 struct thread 멤버중 file_descriptor_table을 50개로 줄였는데 이러면 sys_open 코드 수정해야함 그리고 tid가 400을 넘어갈 정도로 커질 수 있으니, file_descriptor_table을 129개의 배열로 하는 디자인은 바꿔야함///////////////
-        struct file *file_ = filesys_open(*((uint32_t *)(f->esp+4)));
+        static struct file *file_;
+        file_ = filesys_open(*((uint32_t *)(f->esp+4)));
+
         struct thread *now = thread_current();
         int return_val = 2; // 내가 채우게 될 file_descriptor_table의 index(0에서 시작)
 
@@ -695,6 +697,10 @@ enum intr_level my_level = intr_disable();
     enum intr_level old_level = intr_enable();
 
 //printf("sys write and tid is %d\n",thread_current()->tid);
+//printf("first arg is %d\n", *(uint32_t *)(f->esp+20));
+//printf("second arg is %s\n", *(uint32_t *)(f->esp+24));
+//printf("third arg is %d\n", *(uint32_t *)(f->esp+28));
+
 
     if(*(uint32_t *)(f->esp+24) > 0xc0000000 || *(uint32_t *)(f->esp+24) < 0x8048000 || *(uint32_t *)(f->esp+24) == NULL){
       printf("%s: exit(%d)\n", front, -1);
@@ -740,7 +746,9 @@ enum intr_level my_level = intr_disable();
       else{
         struct thread *cur = thread_current();
         struct file *file_ = cur->file_descriptor_table[index];
-        int ret_val = file_write(file_, *(uint32_t *)(f->esp+24), *(uint32_t *)(f->esp+28));
+        int ret_val = file_write(file_, *((uint32_t *)(f->esp+24)), *(uint32_t *)(f->esp+28));
+
+
         f->eax = ret_val;
       }
     }
@@ -983,12 +991,16 @@ enum intr_level my_level = intr_disable();
     //printf("file length is %d\n", file->inode->data.length);
 
 
-    /* install_page는 pte도 없으면 만들어줌 */
+    /* install_page는 pte도 없으면 만들어줌 
+     * 여기서 install_page로 file->pos 증가시키는 바람에
+     * 밑에서 pos 다시 원래대로 해야함  */
+
+    uint16_t original_pos = file->pos;
+
     if (!install_page (*(int32_t *)(f->esp+20), user_pool_page, 1)){ 
       palloc_free_page (user_pool_page);
     } 
 
-    
     if(file_read(file, user_pool_page, file->inode->data.length) == 0){
       if(thread_current()->my_parent == 1){
         palloc_free_page (user_pool_page);
@@ -1003,6 +1015,9 @@ enum intr_level my_level = intr_disable();
          thread_exit ();
       }
     }
+
+   file->pos = original_pos; 
+
     int p = 0;
     for(; p<10; p++){
       if(thread_current()->mapping[p] == NULL)
