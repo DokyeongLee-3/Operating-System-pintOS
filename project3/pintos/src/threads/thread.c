@@ -487,6 +487,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->load_success = true;
 
   t->esp = 0xbffff000;
+  t->code_segment_base = NULL;
+  t->data_segment_base = NULL;
+  t->code_segment_size = 0;
+  t->data_segment_size = 0;
 
   //hash_init(&(t->pages), page_hash, page_less, NULL);
  

@@ -108,6 +108,10 @@ struct thread
 #endif
     struct hash pages; //supplemental page table entry
     uint32_t *esp;
+    uint32_t *code_segment_base;
+    uint32_t code_segment_size;
+    uint32_t *data_segment_base;
+    uint32_t data_segment_size;
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

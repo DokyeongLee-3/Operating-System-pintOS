@@ -233,9 +233,9 @@ process_execute (const char *file_name)
   enum intr_level my_level = intr_disable();  
 
   if(thread_current()->tid == 1){
-    //printf("sema down and my pid is 1\n");
+   // printf("sema down and my pid is 1\n");
     sema_down(&main_waiting_exec);
-    //printf("escape from main_waiting_exec\n");
+   // printf("escape from main_waiting_exec\n");
   }
 
   else if(thread_current()->tid == 3){
@@ -1224,7 +1224,18 @@ char *front = strtok_r(file_name, " ", &save_ptr);
 //printf("offset of segment %d\n", phdr.p_offset);
 //printf("virtual address of segment %p\n", phdr.p_vaddr);
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
+//printf("name is %s\n", thread_current()->name);
 //printf("mem_page is %x\n", mem_page);
+//printf("the file size is %x\n", phdr.p_filesz);
+//printf("the mem size is %x\n", phdr.p_memsz);
+              if(i == 0){
+                thread_current()->code_segment_base = mem_page;
+                thread_current()->code_segment_size = phdr.p_memsz;
+              }
+              else if(i == 1){
+                thread_current()->data_segment_base = mem_page;
+                thread_current()->data_segment_size= phdr.p_memsz;
+              } 
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
               if (phdr.p_filesz > 0)
@@ -1361,9 +1372,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       // 나중에 page fault뜨면 여기서 file 읽어와서 user frame에 load해주자
       uint32_t *backup_kpage = palloc_get_page(PAL_ZERO);
 
-//printf("In load segment, user process address is %p and my tid is %d\n", upage, thread_current()->tid); 
-//printf("********address of spt is %p********\n", spt_entry);
-//
       spt_entry->kernel_vaddr = backup_kpage;
       spt_entry->user_vaddr = upage;
       spt_entry->read_size = page_read_bytes;
@@ -1375,6 +1383,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           palloc_free_page (backup_kpage);
           return false;
         }
+
       memset (backup_kpage + page_read_bytes, 0, page_zero_bytes);
 
       hash_insert(&(thread_current()->pages), &(spt_entry->hash_elem));
@@ -1493,7 +1502,7 @@ install_page (void *upage, void *kpage, bool writable)
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
   ASSERT(kpage > &user_pool);
- 
+
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }

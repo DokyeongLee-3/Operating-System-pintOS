@@ -152,6 +152,7 @@ static void
 bss_init (void) 
 {
   extern char _start_bss, _end_bss;
+
   memset (&_start_bss, 0, &_end_bss - &_start_bss);
 }
 
@@ -194,7 +195,6 @@ paging_init (void)
       if (pd[pde_idx] == 0)
         {
           pt = palloc_get_page (PAL_ASSERT | PAL_ZERO);
-//printf("******************address of pagetable base is %p********************\n", pt);
           pd[pde_idx] = pde_create (pt);
         }
 

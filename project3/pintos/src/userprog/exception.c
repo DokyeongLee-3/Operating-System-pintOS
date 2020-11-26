@@ -316,19 +316,16 @@ page_fault (struct intr_frame *f)
 
 
     ASSERT(faulting_addr == finding->user_vaddr);
-
     uint32_t *kpage = palloc_get_multiple(PAL_USER,1);
     memcpy(kpage, finding->kernel_vaddr, finding->read_size);
     memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
-  
-    if (!install_page (addr_of_fault_addr, kpage, finding->writable)){
+ 
+    if (!install_page (addr_of_fault_addr, kpage, finding->writable)){ // pte도 만들어줌
       palloc_free_page (kpage);
     }
-
     if(thread_current()->pagedir == NULL)
       pagedir_create();    
-  
-    //lookup_page(thread_current()->pagedir, addr_of_fault_addr, 1); // 필요한건가?
+ 
  
     remove_elem(&(thread_current()->pages), &finding->hash_elem);  
     palloc_free_page(finding->kernel_vaddr);

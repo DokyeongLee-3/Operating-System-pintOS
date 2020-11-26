@@ -112,6 +112,7 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
   // page_cnt만큼 연속적으로 사용가능한 frame이 있다면 그 시작 index를 리턴
   page_idx = bitmap_scan_and_flip (pool->used_map, 0, page_cnt, false);
 
+
   lock_release (&pool->lock);
 
 

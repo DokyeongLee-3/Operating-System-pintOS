@@ -14,8 +14,29 @@
 #include "lib/kernel/list.h"
 #include "lib/kernel/hash.h"
 #include "lib/round.h"
+#include "lib/limits.h"
+
+extern char _start_bss, _end_bss;
+
+typedef unsigned long elem_type;
+#define ELEM_BITS (sizeof (elem_type) * CHAR_BIT)
+
+struct bitmap
+  {
+    size_t bit_cnt;     /* Number of bits. */
+    elem_type *bits;    /* Elements that represent bits. */
+  };
+
+struct pool
+  {
+    struct lock lock;
+    struct bitmap *used_map;
+    uint8_t *base;
+  };
 
 extern struct list all_list;
+extern struct pool kernel_pool, user_pool;
+
 
 #define MAP_FAILED ((mapid_t) -1)
 typedef int mapid_t;
@@ -43,10 +64,23 @@ struct inode
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
   };
+
+static inline elem_type
+bit_mask (size_t bit_idx)
+{
+  return (elem_type) 1 << (bit_idx % ELEM_BITS);
+}
+
 //extern bool load_success;
 extern struct semaphore main_waiting_exec;
 extern struct semaphore exec_waiting_child_simple;
 extern struct semaphore multichild[46]; //multi-recurse.c, rox-multichild.c에서 사용
+
+static inline size_t
+elem_idx (size_t bit_idx)
+{
+  return bit_idx / ELEM_BITS;
+}
 
 
 static void syscall_handler (struct intr_frame *);
@@ -659,7 +693,6 @@ enum intr_level my_level = intr_disable();
 
   else if(*(uint32_t *)f->esp == 9){ // SYS_WRITE 
 
-//printf("sys_write and my tid is %d\n", thread_current()->tid);
     enum intr_level old_level = intr_enable();
 
     if(*(uint32_t *)(f->esp+24) > 0xc0000000 || *(uint32_t *)(f->esp+24) < 0x8048000 || *(uint32_t *)(f->esp+24) == NULL){
@@ -691,8 +724,9 @@ enum intr_level my_level = intr_disable();
     else if(*(uint32_t *)(f->esp+20) == 0x1){
       //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 300, 1);
       //bad_write case를 위해서 여기 무언가 필요
-
+      //enum intr_level tmp_level = intr_enable();
       putbuf(*(uint32_t *)(f->esp+24), *(uint32_t *)(f->esp+28));
+      //intr_set_level(tmp_level);
       //sema_up(&main_waiting_exec);
       f->eax = *(uint32_t *)(f->esp+28);
     }
@@ -800,10 +834,84 @@ enum intr_level my_level = intr_disable();
    enum intr_level my_level = intr_enable();
 
    //printf("stack pointer in sys_mmap is %p\n", f->esp);
+   //printf("thread stack pointer is %p\n", thread_current()->esp);
    //printf("first argument is %d\n", *(int32_t *)(f->esp+16));
    //printf("second argument is %p\n", *(int32_t *)(f->esp+20));
-   //printf("thread esp is %p\n", thread_current()->esp);
+   //printf("code segment is %p\n", f->cs);
+   //printf("stack segment is %p\n", f->ss);
+   //printf("data segment is %p\n", f->ds);
+
    //hex_dump(f->esp, f->esp, 200, 1);
+
+   if((lookup_page(thread_current()->pagedir, *(int32_t *)(f->esp+20), false) != NULL)){
+     if(!(  *(int32_t *)(f->esp+20) >= thread_current()->data_segment_base && *(int32_t *)(f->esp+20) < thread_current()->data_segment_base + (ROUND_UP(thread_current()->data_segment_size, PGSIZE)))  ){ //mmap-overlap
+       if(thread_current()->my_parent == 1){
+         //sema_up(&main_waiting_exec);
+         f->eax = -1;
+         return;
+       }
+       if(thread_current()->my_parent == 3){
+         sema_up(&exec_waiting_child_simple);
+         f->eax = -1;
+         return;
+       }
+     }
+   }   
+  
+   uint32_t sum_of_file_length = 0;
+   int k = 0;
+   for(; k<10; k++){
+     if(thread_current()->file_descriptor_table[k] != 0){
+       sum_of_file_length += thread_current()->file_descriptor_table[k]->inode->data.length;
+     }
+   }
+
+// code, bss, initialized data 영역의 base와 limit을 어떻게 아나?
+// gdt.c, gdt.h는 수정불가에 static으로 선언되어있는데
+ 
+    if(*(int32_t *)(f->esp+20) >= 0x8048000 && *(int32_t *)(f->esp+20) < 0x8048000+ (ROUND_UP(thread_current()->code_segment_size, PGSIZE))){ //mmap-over-code 
+      if(thread_current()->my_parent == 1){
+        sema_up(&main_waiting_exec);
+        f->eax = -1;
+        return;
+      }
+      if(thread_current()->my_parent == 3){
+        sema_up(&exec_waiting_child_simple);
+        f->eax = -1;
+        return;
+      }
+    }
+
+
+/* 아니 왜 mmap-over-data는 sys exit 호출후 끝내고
+ * mmap-over-code는 sys exit 호출안하고 abnormally terminate??? */
+    if(*(int32_t *)(f->esp+20) >= thread_current()->data_segment_base && *(int32_t *)(f->esp+20) < thread_current()->data_segment_base + (ROUND_UP(thread_current()->data_segment_size, PGSIZE))){ //mmap-over-data
+      if(thread_current()->my_parent == 1){
+        //sema_up(&main_waiting_exec);
+        f->eax = -1;
+        return;
+      }
+      if(thread_current()->my_parent == 3){
+        //sema_up(&exec_waiting_child_simple);
+        f->eax = -1;
+        return;
+      }
+   }
+
+   uint32_t thread_sp = thread_current()->esp; 
+   if(*(int32_t *)(f->esp+20) <= PHYS_BASE && *(int32_t *)(f->esp+20) >= (thread_sp & 0xfffff000)){ //mmap-over-stk
+      if(thread_current()->my_parent == 1){
+        sema_up(&main_waiting_exec);
+        f->eax = -1;
+        return;
+      }
+      if(thread_current()->my_parent == 3){
+        sema_up(&exec_waiting_child_simple);
+        f->eax = -1;
+        return;
+      }
+   }
+   
 
     int i = 0;
     bool valid_fd = false;
@@ -853,7 +961,6 @@ enum intr_level my_level = intr_disable();
         return;
       }
     }
-    
 
 /////////////// 정상적으로 mmap 하는 case ////////////////
 
@@ -868,11 +975,39 @@ enum intr_level my_level = intr_disable();
     struct file *file = thread_current()->file_descriptor_table[i];
     uint8_t required_pages = DIV_ROUND_UP((file->inode->data.length),PGSIZE);
     uint32_t file_size = file->inode->data.length;
-    uint32_t *user_pool_page = palloc_get_multiple(PAL_USER,required_pages);
+
+    /* mmap-zero같은 경우는 file크기가 0이어도 일단 1개 page의 pool은 할당해줘야함 */
+    if(required_pages == 0) 
+      required_pages = 1; 
+
+//printf("*******bit mask result : %0x*********\n", bit_mask(3));
+
+    uint32_t *user_pool_page = palloc_get_multiple(PAL_USER, required_pages);
     //printf("file length is %d\n", file->inode->data.length);
 
-    load_segment(file, file->pos, *(int32_t *)(f->esp+20) , file_size, required_pages*PGSIZE-file_size, 1);
+
+    /* install_page는 pte도 없으면 만들어줌 */
+    if (!install_page (*(int32_t *)(f->esp+20), user_pool_page, 1)){ 
+      palloc_free_page (user_pool_page);
+    } 
+
     
+    if(file_read(file, user_pool_page, file->inode->data.length) == 0){
+      if(thread_current()->my_parent == 1){
+        palloc_free_page (user_pool_page);
+        sema_up(&main_waiting_exec);
+        printf("%s: exit(%d)\n", thread_current()->name, -1);
+        thread_exit ();
+      }
+      if(thread_current()->my_parent == 3){
+         palloc_free_page (user_pool_page);
+         printf("%s: exit(%d)\n", thread_current()->name, -1);
+         sema_up(&exec_waiting_child_simple);
+         thread_exit ();
+      }
+    }
+
+    f->eax = *(int32_t *)(f->esp+20);
     
     intr_set_level(my_level);
 
@@ -880,14 +1015,21 @@ enum intr_level my_level = intr_disable();
 
   else if(*(uint32_t *)f->esp == 14){ //SYS_UNMAP
 
-    //hex_dump(f->esp, f->esp, 200, 1);
-    //printf("first argument is %0x\n", *(int32_t *)(f->esp+16)); 
-    uint32_t *pte = lookup_page (thread_current()->pagedir, *(int32_t *)(f->esp+16), 0);
-    //printf("user pool page address is %p\n", ptov(*pte));
+    enum intr_level my_level = intr_disable();
 
-    //palloc_free_multiple(ptov(*pte));
+
+    //hex_dump(f->esp, f->esp, 200, 1);
+    uint32_t *pte = lookup_page (thread_current()->pagedir, *(int32_t *)(f->esp+16), 0);
     //*pte = *pte & 0xfffffffe; // present bit를 0으로
+    uint32_t p = ptov(*pte&0xfffff000);
+    uint32_t user_pool_base = user_pool.base;
+    uint32_t user_pool_idx = ((p-user_pool_base)/PGSIZE);
     
+    palloc_free_multiple((void *)p,1);
+    pagedir_clear_page(thread_current()->pagedir, *(int32_t *)(f->esp+16));
+
+   
+   intr_set_level(my_level); 
 
   }
   
