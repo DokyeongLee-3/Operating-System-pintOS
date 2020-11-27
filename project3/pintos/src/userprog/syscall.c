@@ -673,6 +673,7 @@ enum intr_level my_level = intr_disable();
       sema_up(&main_waiting_exec);
       thread_exit();
     }
+
     else{
       int16_t fd = 0;
       while(thread_current()->array_of_fd[fd] != *(uint32_t *)(f->esp+20)){

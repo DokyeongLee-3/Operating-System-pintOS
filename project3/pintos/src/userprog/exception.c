@@ -275,7 +275,6 @@ page_fault (struct intr_frame *f)
   if(finding == NULL){
     uint32_t sp = f->esp;
     uint32_t tp = thread_current()->esp;
-
     if(f->error_code == 4){
       if(sp < PHYS_BASE && sp > faulting_addr && sp-faulting_addr > PGSIZE){//pt-grow-bad, pt-wrice-code2
         if(thread_current()->my_parent == 1){
@@ -311,6 +310,18 @@ page_fault (struct intr_frame *f)
       if (!install_page ((uint32_t *)temp, new_stack_page, 1))
         palloc_free_page (new_stack_page);
       return;
+    }
+
+    if(f->error_code == 2 ){ // pt-grow-stk-sc
+      if(thread_current()->esp < addr_of_fault_addr){
+        uint32_t temp = addr_of_fault_addr;
+        temp &= 0xfffff000;
+        uint32_t *new_stack_page = palloc_get_multiple(PAL_USER,1);
+        thread_current()->esp = thread_current()->esp - PGSIZE;
+        if (!install_page ((uint32_t *)temp, new_stack_page, 1))
+          palloc_free_page (new_stack_page);
+        return;
+      }
     }
   
   }
