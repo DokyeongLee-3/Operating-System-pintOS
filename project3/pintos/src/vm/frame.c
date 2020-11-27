@@ -56,7 +56,7 @@ void frame_table_init(size_t num_of_user_frame){
   //printf("<<<<<<<<<<address of frame_table is %p>>>>>>>>>>>>>>>\n", frame_table);
 }
 
-void frame_table_free(){
+void frame_table_free(void){
  free(frame_table);
 }
 
@@ -66,10 +66,10 @@ void frame_table_free(){
  * 이 frame을 참조중인 page들에 대한 reference도 없애주기(그 page들의 pte에
  * valid bit을 0으로 바꿔놓기) 그리고 swap_out호출하고 적어준 sector의 시작 index를  리턴*/
 
-uint32_t evict_single_frame_and_swap_out(){
+uint32_t evict_single_frame_and_swap_out(void){
 
   bool find_evicted_frame = false;
-  int i = 0;
+  uint32_t i = 0;
   uint32_t *pt;
 
   // swap_out할 내용을 여기 옮겨적어놨다가 밑에서 block_write할때 buffer로 넘겨주기
@@ -77,7 +77,7 @@ uint32_t evict_single_frame_and_swap_out(){
 
   for(; i < num_of_pagedir_index; i = i+1){
     pt = thread_current()->pagedir[i];
-    int j = 0;
+    uint32_t j = 0;
     for( ;j < num_of_pagedir_index; j = j+1){
       if(!pagedir_is_accessed(init_page_dir[i], pt[j])){
         find_evicted_frame = true;
@@ -105,10 +105,10 @@ uint32_t evict_single_frame_and_swap_out(){
     * physical memory가 physical memory의 frame들에 1대1 매핑되어 있는
     * user_pool의 page중 가장 첫번째 page에 vtop
     * 적용한거랑 같다면 그 pte의 present bit를 0으로 */
-   int p = 0;
+   uint32_t p = 0;
    for(; p < num_of_pagedir_index; p = p+1){
      pt = (thread_current()->pagedir)[i];
-     int q = 0;
+     size_t q = 0;
      for(; q < num_of_pagedir_index; q = q+1){
        if(pt[q]>>12 == vtop(user_pool.base + PGSIZE)){
          memcpy(tmp_page, pt[q], PGSIZE);
@@ -118,7 +118,7 @@ uint32_t evict_single_frame_and_swap_out(){
    }
   }
   
-  int q = 0;
+  size_t q = 0;
   int sector = 0;
 /* 1개의 sector는 512byte-> 1page를 옮겨적기엔
  * 8개의 sector가 필요 -> swap_table에서 8개의 연속하는 slot찾기 */

@@ -27,7 +27,7 @@ struct bitmap
     elem_type *bits;    /* Elements that represent bits. */
   };
 
-void init_swap_table(){
+void init_swap_table(void){
   struct block *swap = block_get_role(3);
   uint32_t number_of_sectors = swap->size;
   my_swap_table = bitmap_create(number_of_sectors);
