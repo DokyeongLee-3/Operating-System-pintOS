@@ -314,7 +314,6 @@ page_fault (struct intr_frame *f)
     }
   
   }
-
   /* Count page faults. */
   page_fault_cnt++;
 
@@ -340,8 +339,9 @@ page_fault (struct intr_frame *f)
 
     ASSERT(faulting_addr == finding->user_vaddr);
     uint32_t *kpage = palloc_get_multiple(PAL_USER,1);
-    memcpy(kpage, finding->kernel_vaddr, finding->read_size);
-    memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
+
+    memcpy(kpage, finding->kernel_vaddr, PGSIZE);
+    //memcpy(kpage + finding->read_size, (finding->kernel_vaddr) + finding->read_size , PGSIZE - finding->read_size);
  
     if (!install_page (addr_of_fault_addr, kpage, finding->writable)){ // pte도 만들어줌
       palloc_free_page (kpage);
