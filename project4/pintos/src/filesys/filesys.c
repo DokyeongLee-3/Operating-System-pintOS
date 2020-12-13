@@ -6,6 +6,34 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "lib/kernel/list.h"
+
+struct dir
+  {
+    struct inode *inode;                /* Backing store. */
+    off_t pos;                          /* Current position. */
+  };
+
+struct inode_disk
+  {
+    block_sector_t start;               /* First data sector. */
+    block_sector_t new_start[3];
+    unsigned sparse_cnt;
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+    uint32_t unused[121];               /* Not used. */
+  };
+
+struct inode
+  {
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    struct inode_disk data;             /* Inode content. */
+  };
+
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -67,13 +95,13 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
 
   if (dir != NULL)
     dir_lookup (dir, name, &inode); // 여기 안에서 inode_open 호출해서 inode_open_cnt = 1로 초기화
   dir_close (dir);
-
 
   return file_open (inode);
 }
@@ -100,6 +128,7 @@ do_format (void)
   free_map_create ();
   if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
+
   free_map_close ();
   printf ("done.\n");
 }
