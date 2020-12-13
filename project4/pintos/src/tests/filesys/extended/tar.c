@@ -59,7 +59,7 @@ make_tar_archive (const char *archive_name, char *files[], size_t file_cnt)
       return false;
     }
 
-printf("archive_name is %s\n", archive_name);
+//printf("archive_name is %s\n", archive_name);
 
   archive_fd = open (archive_name);
   if (archive_fd < 0)

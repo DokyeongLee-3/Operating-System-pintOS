@@ -813,8 +813,13 @@ enum intr_level my_level = intr_disable();
 
 
   else if(*(uint32_t *)f->esp == 11){ // SYS_TELL
-    return;
-
+    int i = 0;
+    for(; i <10; i++){
+      if(thread_current()->array_of_fd[i] == *((uint32_t *)(f->esp+4)))
+        break;
+    }
+    struct file *file_ = thread_current()->file_descriptor_table[i];
+    f->eax = file_->pos;
   }
 
 
@@ -1115,7 +1120,6 @@ enum intr_level my_level = intr_disable();
     size_t ofs;
     for (ofs = 0; inode_read_at (thread_current()->directory_table[i]->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e){
-      printf("in the directory... %s\n", e.name);
     }
     f->eax = exist;
   }
