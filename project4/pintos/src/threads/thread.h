@@ -88,7 +88,6 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
-    char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
@@ -102,6 +101,8 @@ struct thread
     struct file* file_descriptor_table[10]; // 이 thread가 연 파일의 struct file pointer들을모아놓은 배열
     int16_t array_of_fd[10]; //
     int8_t exit_status_of_child[50]; // overflow로 수정!
+    struct file* directory_table[5];
+    int16_t array_of_dir_fd[5];
     bool load_success;
     int16_t my_parent;
     int16_t abnormal_child; //abnormal하게 종료된 child의 tid
@@ -113,6 +114,7 @@ struct thread
     uint32_t *data_segment_base;
     uint32_t data_segment_size;
     uint32_t *mapping[10];
+    char name[16];                      /* Name (for debugging purposes). */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

@@ -187,10 +187,13 @@ compare_bytes (const void *read_data_, const void *expected_data_, size_t size,
       show_cnt = 64;
       msg ("Showing first differing %zu bytes.", show_cnt);
     }
+
   msg ("Data actually read:");
   hex_dump (ofs + i, read_data + i, show_cnt, true);
   msg ("Expected data:");
   hex_dump (ofs + i, expected_data + i, show_cnt, true);
+
+
   fail ("%zu bytes read starting at offset %zu in \"%s\" differ "
         "from expected", j - i, ofs + i, file_name);
 }

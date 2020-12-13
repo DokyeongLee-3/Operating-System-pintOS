@@ -16,7 +16,6 @@ main (int argc, char *argv[])
 {
   if (argc < 3)
     usage ();
-
   return (make_tar_archive (argv[1], argv + 2, argc - 2)
           ? EXIT_SUCCESS : EXIT_FAILURE);
 }
@@ -59,6 +58,9 @@ make_tar_archive (const char *archive_name, char *files[], size_t file_cnt)
       printf ("%s: create failed\n", archive_name);
       return false;
     }
+
+printf("archive_name is %s\n", archive_name);
+
   archive_fd = open (archive_name);
   if (archive_fd < 0)
     {
@@ -99,9 +101,10 @@ archive_file (char file_name[], size_t file_name_size,
           if (!isdir (file_fd))
             success = archive_ordinary_file (file_name, file_fd,
                                              archive_fd, write_error);
-          else
+          else{
             success = archive_directory (file_name, file_name_size, file_fd,
                                          archive_fd, write_error);      
+          }
         }
       else
         {
@@ -160,6 +163,7 @@ static bool
 archive_directory (char file_name[], size_t file_name_size, int file_fd,
                    int archive_fd, bool *write_error)
 {
+
   size_t dir_len;
   bool success = true;
 
@@ -172,7 +176,8 @@ archive_directory (char file_name[], size_t file_name_size, int file_fd,
 
   if (!write_header (file_name, USTAR_DIRECTORY, 0, archive_fd, write_error))
     return false;
-      
+  
+    
   file_name[dir_len] = '/';
   while (readdir (file_fd, &file_name[dir_len + 1])) 
     if (!archive_file (file_name, file_name_size, archive_fd, write_error))

@@ -19,7 +19,6 @@ struct file
     bool deny_write;            /* Has file_deny_write() been called? */
   };
 
-extern struct file;
 
 struct page{
   struct hash_elem hash_elem;

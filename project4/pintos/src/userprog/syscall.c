@@ -15,10 +15,19 @@
 #include "lib/kernel/hash.h"
 #include "lib/round.h"
 #include "lib/limits.h"
+#include "lib/ustar.h"
+#include "filesys/directory.h"
 
 
 typedef unsigned long elem_type;
 #define ELEM_BITS (sizeof (elem_type) * CHAR_BIT)
+
+struct dir_entry
+  {
+    block_sector_t inode_sector;        /* Sector number of header. */
+    char name[NAME_MAX + 1];            /* Null terminated file name. */
+    bool in_use;                        /* In use or free? */
+  };
 
 struct bitmap
   {
@@ -514,6 +523,10 @@ enum intr_level my_level = intr_disable();
 
   
   else if(*(uint32_t *)f->esp == 4){ //SYS_CREATE
+
+//hex_dump(f->esp, f->esp, 200, 1);
+//printf("sys create and name is %s\n", *(((uint32_t *)f->esp)+4)); 
+
     if(*((uint32_t *)f->esp+4) == NULL){
       printf("%s: exit(%d)\n", front, -1);
       sema_up(&main_waiting_exec);
@@ -530,6 +543,11 @@ enum intr_level my_level = intr_disable();
     //hex_dump((uint32_t *)(f->esp), (uint32_t *)(f->esp), 300, 1);
 
     f->eax = filesys_create (*((uint32_t *)f->esp+4), *((uint32_t *)f->esp+5));
+
+
+//fsutil_ls(NULL);
+
+
     intr_set_level(old_level); 
   }
 
@@ -542,6 +560,7 @@ enum intr_level my_level = intr_disable();
     //
     int i = 0;
     f->eax = filesys_remove(*(uint32_t *)(f->esp+4));
+
  
     intr_set_level(old_level);
   } 
@@ -582,16 +601,36 @@ enum intr_level my_level = intr_disable();
     }
     else{
 //////////// 수정해야함, 메모리 부족으로 struct thread 멤버중 file_descriptor_table을 50개로 줄였는데 이러면 sys_open 코드 수정해야함 그리고 tid가 400을 넘어갈 정도로 커질 수 있으니, file_descriptor_table을 129개의 배열로 하는 디자인은 바꿔야함///////////////
+
+        if(strcmp(*((uint32_t *)(f->esp+4)),"/") == 0){ // "/"을 sys_open인자로 주는 경우 ==> 디렉토리를 열려고 하는 경우
+          struct file *file = malloc(sizeof(struct file));
+          file->inode = dir_open_root();
+          file->pos = 0;
+          file->deny_write = 0;
+          
+          int i = 0;
+          for(; i <5; i++)
+            if(thread_current()->directory_table[i] == NULL)
+              break;
+          thread_current()->directory_table[i] = file;
+          // 디렉토리의 fd를 100+tid로 하는건 내 마음대로 그냥 정함
+          thread_current()->array_of_dir_fd[i] = 100 + thread_current()->tid; 
+          f->eax = thread_current()->array_of_dir_fd[i];
+          return;
+          
+        }
+
         static struct file *file_;
         file_ = filesys_open(*((uint32_t *)(f->esp+4)));
-
         struct thread *now = thread_current();
         int return_val = 2; // 내가 채우게 될 file_descriptor_table의 index(0에서 시작)
 
+        
         if(file_ == NULL){
           f->eax = -1;
           //sema_up(&main_waiting_exec);
         }
+        
          
         else if(memcmp(thread_current()->name, *(uint32_t *)(f->esp+4), strlen(front)) == 0){
          //실행중인 나 자신을 열겠다? --> 나중에 이 파일에 write하려면 file_deny_write여부 확인하고 True면 못쓰게 하기
@@ -619,7 +658,8 @@ enum intr_level my_level = intr_disable();
               //방금 file_descritor_table 배열에 채운 struct file pointer의 fd를 array_of_fd에 채움
             now->array_of_fd[return_val] = thread_current()->tid;
             return_val = return_val + 1; //  다음번엔 file_descritor_table의 다음번  index>에 file* 를 채울 것임
-              
+
+
           }
           else{ // open-twice 처럼 같은 프로세스가 같은 파일을 2번 열려고 하는 경우
             
@@ -822,7 +862,8 @@ enum intr_level my_level = intr_disable();
 
 
     else if(current->file_descriptor_table[index_of_close_file] != NULL && current->array_of_fd[index_of_close_file] == current_fd){
-      file_close(current->file_descriptor_table[index_of_close_file]);
+      //file_close(current->file_descriptor_table[index_of_close_file]); 
+      //flil_close를 하면 disk에서도 지워버려서 하면 안되나?
       current->file_descriptor_table[index_of_close_file] = NULL;
       current->array_of_fd[index_of_close_file] = 0;
     }
@@ -1050,6 +1091,79 @@ enum intr_level my_level = intr_disable();
    
    intr_set_level(my_level); 
 
+  }
+  else if(*(uint32_t *)f->esp == 0xf){ //SYS_CHDIR(15)
+    printf("******************syscall chdir ****************************\n");
+    ASSERT(1 != 1);
+  }
+
+  else if(*(uint32_t *)f->esp == 0x10){ // SYS_MKDIR(16)
+    printf("******************syscall mkdir ****************************\n");
+    ASSERT(1 != 1);
+  }
+  
+  else if(*(uint32_t *)f->esp == 0x11){ //SYS_READDIR (17)
+    //printf("sysread_dir first argument is %d and second is %s\n", *((uint32_t *)(f->esp+16)) , *((uint32_t *)(f->esp+20)));
+    bool exist = false;
+    int i = 0;
+    for(; i< 5; i++){
+      if(thread_current()->array_of_dir_fd[i] == *((uint32_t *)(f->esp+16))){
+        exist = true;
+      }
+    }
+    struct dir_entry e;
+    size_t ofs;
+    for (ofs = 0; inode_read_at (thread_current()->directory_table[i]->inode, &e, sizeof e, ofs) == sizeof e;
+       ofs += sizeof e){
+      printf("in the directory... %s\n", e.name);
+    }
+    f->eax = exist;
+  }
+
+
+  else if(*(uint32_t *)f->esp == 0x12){ //SYS_ISDIR (18)
+
+    bool dir = false;
+    int i = 0;
+    for(; i<5; i++){
+      if(thread_current()->array_of_dir_fd[i] == *((uint32_t *)(f->esp+4))){
+        dir = true;
+        f->eax = dir;
+        return;
+      }
+    }
+    f->eax = dir;
+
+  }
+
+
+  else if(*(uint32_t *)f->esp == 0x13){ //SYS_INUMBER (19)
+//printf("sys_inumber argument is %d\n", *((uint32_t *)(f->esp+4)));
+    bool dir = false;
+    bool file = false;
+    int i = 0;
+    for(; i < 5; i++){
+      if(thread_current()->array_of_dir_fd[i] == *((uint32_t *)(f->esp+4))){
+        dir = true;
+        break;
+      }
+    }
+    if(dir){
+      struct file *file_ = thread_current()->directory_table[i];
+      f->eax = file_->inode->sector;
+    }
+    else{
+      i = 0;
+      for(; i <10; i++){
+        if(thread_current()->array_of_fd[i] == *((uint32_t *)(f->esp+4))){
+          file = true;
+          break;
+        }
+      }
+      struct file *file_ = thread_current()->file_descriptor_table[i];
+      f->eax = file_->inode->sector;
+    }
+   
   }
   
   else{ 

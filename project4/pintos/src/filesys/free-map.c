@@ -17,7 +17,6 @@ free_map_init (void)
     PANIC ("bitmap creation failed--file system device is too large");
   bitmap_mark (free_map, FREE_MAP_SECTOR);
   bitmap_mark (free_map, ROOT_DIR_SECTOR);
-  free_map_create();
 }
 
 /* Allocates CNT consecutive sectors from the free map and stores
@@ -74,10 +73,8 @@ void
 free_map_create (void) 
 {
   /* Create inode. */
-//printf("$$$$$$$ bitmap_file_size is %d $$$$$$$$\n",  bitmap_file_size (free_map));
-  if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map))){
+  if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map)))
     PANIC ("free map creation failed");
-  }
 
   /* Write bitmap to file. */
   free_map_file = file_open (inode_open (FREE_MAP_SECTOR));

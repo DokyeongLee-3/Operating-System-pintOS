@@ -492,6 +492,13 @@ init_thread (struct thread *t, const char *name, int priority)
   i = 0;
   for( ; i<10; i++)
     t->mapping[i] = NULL;
+
+  i = 0;
+  for(; i < 5; i++){
+    t->directory_table[i] = NULL;
+    t->array_of_dir_fd[i] = NULL;
+  }
+
   t->code_segment_size = 0;
   t->data_segment_size = 0;
 
